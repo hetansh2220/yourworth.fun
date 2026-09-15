@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Providers } from "./providers";
+import { QueryProvider } from "@/providers/query-provider";
+import { AppPrivyProvider } from "@/providers/privy-provider";
 
 export const metadata: Metadata = {
   title: "newtime.fun",
@@ -11,7 +12,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
+        <AppPrivyProvider>
+          <QueryProvider>{children}</QueryProvider>
+        </AppPrivyProvider>
       </body>
     </html>
   );

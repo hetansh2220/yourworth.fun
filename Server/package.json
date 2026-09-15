@@ -1,0 +1,19 @@
+{
+  "name": "web",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+   "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun index.ts"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  },
+  "dependencies": {
+    "hono": "^4.13.7"
+  }
+}
