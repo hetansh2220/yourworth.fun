@@ -5,7 +5,9 @@ import { useLogout, usePrivy } from "@privy-io/react-auth";
 import { Button, buttonVariants } from "@/components/ui/button";
 
 export default function Page() {
-  const { ready, authenticated } = usePrivy();
+  const { ready, authenticated, getAccessToken, user } = usePrivy();
+  console.log("Access Token:", getAccessToken());
+  console.log("User ID:", user?.id);
   const { logout } = useLogout();
   return (
     <main className="min-h-screen p-6">

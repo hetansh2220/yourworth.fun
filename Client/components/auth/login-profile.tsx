@@ -8,14 +8,17 @@ import { useCreateWallet } from "@privy-io/react-auth/solana";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type WalletAccount = Extract<User["linkedAccounts"][number], { type: "wallet" }>;
+type WalletAccount = Extract<
+  User["linkedAccounts"][number],
+  { type: "wallet" }
+>;
 
 function getSolanaEmbeddedWallet(user: User | null): WalletAccount | undefined {
   return user?.linkedAccounts.find(
     (account): account is WalletAccount =>
       account.type === "wallet" &&
       account.chainType === "solana" &&
-      account.walletClientType === "privy"
+      account.walletClientType === "privy",
   );
 }
 

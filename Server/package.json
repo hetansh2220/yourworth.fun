@@ -1,12 +1,14 @@
 {
-  "name": "web",
+  "name": "server",
   "module": "index.ts",
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "drizzle-kit": "^1.0.0-rc.4",
+    "tsx": "^4.23.13"
   },
-   "scripts": {
+  "scripts": {
     "dev": "bun --hot src/index.ts",
     "start": "bun index.ts"
   },
@@ -14,6 +16,12 @@
     "typescript": "^7"
   },
   "dependencies": {
-    "hono": "^4.13.7"
+    "@neondatabase/serverless": "^1.1.0",
+    "@privy-io/node": "^0.34.0",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^1.0.0-rc.4",
+    "drizzle-zod": "^0.8.3",
+    "hono": "^4.13.7",
+    "zod": "^4.6.5"
   }
 }
