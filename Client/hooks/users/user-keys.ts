@@ -3,5 +3,7 @@ export const userKeys = {
   lists: () => [...userKeys.all, "list"] as const,
   byUsername: (username: string) =>
     [...userKeys.all, "username", username.toLowerCase()] as const,
+  availability: (username: string) =>
+    [...userKeys.all, "availability", username.toLowerCase()] as const,
   me: () => [...userKeys.all, "me"] as const,
 };

@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { eq } from "drizzle-orm";
+import { desc, eq, lt } from "drizzle-orm";
 
 import { db } from "../db";
 import { createUserSchema, updateUserSchema, users } from "../db/schema";
@@ -46,10 +46,11 @@ export async function createUser(c: Context<AppEnv>) {
     if (existingUser) {
       return c.json(
         {
-          success: false,
+          success: true,
           message: "User already exists",
+          user: existingUser,
         },
-        409
+        200
       );
     }
 
@@ -208,20 +209,47 @@ export async function getUserByUsername(c: Context<AppEnv>) {
 }
 
 export async function getUsers(c: Context<AppEnv>) {
+  const parsedLimit = Number(c.req.query("limit") ?? "20");
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 50)
+    : 20;
+  const cursor = c.req.query("cursor");
+  const cursorDate = cursor ? new Date(cursor) : null;
+  const validCursor =
+    cursorDate && !Number.isNaN(cursorDate.getTime()) ? cursorDate : null;
+  const publicUserFields = {
+    id: users.id,
+    username: users.username,
+    avatar: users.avatar,
+    createdAt: users.createdAt,
+  };
+
   try {
-    const usersList = await db
-      .select({
-        id: users.id,
-        username: users.username,
-        avatar: users.avatar,
-        createdAt: users.createdAt,
-      })
-      .from(users);
+    const usersList = validCursor
+      ? await db
+          .select(publicUserFields)
+          .from(users)
+          .where(lt(users.createdAt, validCursor))
+          .orderBy(desc(users.createdAt))
+          .limit(limit + 1)
+      : await db
+          .select(publicUserFields)
+          .from(users)
+          .orderBy(desc(users.createdAt))
+          .limit(limit + 1);
+
+    const visibleUsers = usersList.slice(0, limit);
+    const lastUser = visibleUsers.at(-1);
+    const nextCursor =
+      usersList.length > limit && lastUser
+        ? lastUser.createdAt.toISOString()
+        : null;
 
     return c.json(
       {
         success: true,
-        users: usersList,
+        users: visibleUsers,
+        nextCursor,
       },
       200
     );
@@ -236,6 +264,7 @@ export async function getUsers(c: Context<AppEnv>) {
     );
   }
 }
+
 export async function updateUser(c: Context<AppEnv>) {
   const privyUserId = c.get("privyUserId");
   const body = await c.req.json().catch(() => null);

@@ -35,7 +35,19 @@ export async function authMiddleware(c: Context<AppEnv>, next: Next) {
       .utils()
       .auth()
       .verifyAuthToken(token);
-    const privyUser = await privy.users()._get(claims.user_id);
+
+    c.set("privyUserId", claims.user_id);
+
+    await next();
+  } catch {
+    return c.json({ success: false, message: "Invalid or expired token" }, 401);
+  }
+}
+
+export async function walletRequiredMiddleware(c: Context<AppEnv>, next: Next) {
+  try {
+    const privyUserId = c.get("privyUserId");
+    const privyUser = await privy.users()._get(privyUserId);
     const walletAddress = getSolanaEmbeddedWalletAddress(
       privyUser.linked_accounts
     );
@@ -47,11 +59,13 @@ export async function authMiddleware(c: Context<AppEnv>, next: Next) {
       );
     }
 
-    c.set("privyUserId", claims.user_id);
     c.set("walletAddress", walletAddress);
 
     await next();
   } catch {
-    return c.json({ success: false, message: "Invalid or expired token" }, 401);
+    return c.json(
+      { success: false, message: "Failed to load embedded wallet" },
+      500
+    );
   }
 }

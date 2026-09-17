@@ -51,6 +51,7 @@ export default function LoginCode() {
 
     try {
       await loginWithCode({ code });
+      window.sessionStorage.removeItem("newtime:email");
       router.push("/login?step=profile");
     } catch (loginError) {
       setError(getErrorMessage(loginError));

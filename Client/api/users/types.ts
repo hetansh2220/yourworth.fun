@@ -14,6 +14,7 @@ export type User = PublicUser & {
 
 export type UsersResponse = ApiSuccess<{
   users: PublicUser[];
+  nextCursor: string | null;
 }>;
 
 export type UserResponse = ApiSuccess<{

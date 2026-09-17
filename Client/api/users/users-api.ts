@@ -7,9 +7,26 @@ import type {
   UsersResponse,
 } from "./types";
 
+export type GetUsersParams = {
+  limit?: number;
+  cursor?: string | null;
+};
+
 export const usersApi = {
-  getUsers() {
-    return apiFetch<UsersResponse>("/users");
+  getUsers(params: GetUsersParams = {}) {
+    const searchParams = new URLSearchParams();
+
+    if (params.limit) {
+      searchParams.set("limit", String(params.limit));
+    }
+
+    if (params.cursor) {
+      searchParams.set("cursor", params.cursor);
+    }
+
+    const query = searchParams.toString();
+
+    return apiFetch<UsersResponse>(`/users${query ? `?${query}` : ""}`);
   },
 
   getUserByUsername(username: string) {

@@ -4,6 +4,17 @@ export type ApiSuccess<T> = {
   success: true;
 } & T;
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public data: unknown
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 type ApiFetchOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
   token?: string | null;
@@ -36,7 +47,7 @@ export async function apiFetch<T>(
         : data && typeof data === "object" && "error" in data
           ? String(data.error)
           : "Something went wrong";
-    throw new Error(message);
+    throw new ApiError(message, response.status, data);
   }
 
   return data as T;

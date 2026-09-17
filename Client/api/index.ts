@@ -1,4 +1,4 @@
-export { apiFetch } from "./api-client";
+export { ApiError, apiFetch } from "./api-client";
 export type { ApiSuccess } from "./api-client";
 export { usersApi } from "./users";
 export type {
