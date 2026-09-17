@@ -41,33 +41,39 @@ export default function LoginEmail() {
 
   return (
     <form
-      className="grid gap-4"
+      className="mx-auto grid w-full max-w-md gap-7 text-center"
       onSubmit={(event) => {
         event.preventDefault();
         submitEmail();
       }}
     >
-      <div>
-        <p className="text-sm text-muted-foreground">Step 1 of 3</p>
-        <h1 className="mt-1 text-2xl font-semibold">Enter your email</h1>
+      <div className="grid gap-4">
+        <h1 className="text-4xl font-semibold leading-tight tracking-normal text-white sm:text-5xl">
+          Welcome to worth
+        </h1>
+        <p className="text-base text-white/60 sm:text-lg">
+          Enter your email to login
+        </p>
       </div>
 
-      <Input
-        type="email"
-        placeholder="you@example.com"
-        value={email}
-        onChange={(event) => {
-          setEmail(event.target.value);
-          setError("");
-        }}
-        aria-invalid={Boolean(error)}
-      />
+      <div className="grid gap-4">
+        <Input
+          type="email"
+          placeholder="Enter your email"
+          value={email}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            setError("");
+          }}
+          aria-invalid={Boolean(error)}
+        />
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      <Button type="submit" disabled={loading}>
-        {loading ? "Sending..." : "Send OTP"}
-      </Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? "Sending..." : "Log in"}
+        </Button>
+      </div>
     </form>
   );
 }

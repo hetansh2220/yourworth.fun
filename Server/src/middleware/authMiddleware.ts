@@ -25,7 +25,7 @@ export async function authMiddleware(c: Context<AppEnv>, next: Next) {
   const authHeader = c.req.header("Authorization");
 
   if (!authHeader?.startsWith("Bearer ")) {
-    return c.json({ error: "Unauthorized" }, 401);
+    return c.json({ success: false, message: "Unauthorized" }, 401);
   }
 
   const token = authHeader.replace("Bearer ", "");
@@ -41,7 +41,10 @@ export async function authMiddleware(c: Context<AppEnv>, next: Next) {
     );
 
     if (!walletAddress) {
-      return c.json({ error: "Solana embedded wallet is not ready" }, 400);
+      return c.json(
+        { success: false, message: "Solana embedded wallet is not ready" },
+        400
+      );
     }
 
     c.set("privyUserId", claims.user_id);
@@ -49,6 +52,6 @@ export async function authMiddleware(c: Context<AppEnv>, next: Next) {
 
     await next();
   } catch {
-    return c.json({ error: "Invalid or expired token" }, 401);
+    return c.json({ success: false, message: "Invalid or expired token" }, 401);
   }
 }

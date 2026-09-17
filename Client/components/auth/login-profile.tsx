@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@privy-io/react-auth";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useUser as usePrivyUser } from "@privy-io/react-auth";
 import { useCreateWallet } from "@privy-io/react-auth/solana";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useCreateUser } from "@/hooks/users/use-create-user";
+import { useCurrentUser } from "@/hooks/users/use-current-user";
 
 type WalletAccount = Extract<
   User["linkedAccounts"][number],
@@ -18,33 +20,40 @@ function getSolanaEmbeddedWallet(user: User | null): WalletAccount | undefined {
     (account): account is WalletAccount =>
       account.type === "wallet" &&
       account.chainType === "solana" &&
-      account.walletClientType === "privy",
+      account.walletClientType === "privy"
   );
 }
 
-function getUsername(userId: string) {
-  if (typeof window === "undefined") {
-    return "";
-  }
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Could not create user.";
+}
 
-  return window.localStorage.getItem(`newtime:username:${userId}`) ?? "";
+function isWalletNotReadyError(message: string) {
+  return message.toLowerCase().includes("wallet is not ready");
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 export default function LoginProfile() {
   const router = useRouter();
   const { ready, authenticated, user } = usePrivy();
+  const { refreshUser } = usePrivyUser();
   const { createWallet } = useCreateWallet();
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
+  const [preparingWallet, setPreparingWallet] = useState(false);
+  const createUserMutation = useCreateUser();
+  const currentUserQuery = useCurrentUser();
   const attemptedWalletCreation = useRef(false);
   const solanaWallet = getSolanaEmbeddedWallet(user);
-  const savedUsername = user ? getUsername(user.id) : "";
 
   useEffect(() => {
-    if (savedUsername) {
+    if (currentUserQuery.data?.user) {
       router.replace("/");
     }
-  }, [router, savedUsername]);
+  }, [currentUserQuery.data?.user, router]);
 
   useEffect(() => {
     if (
@@ -58,10 +67,53 @@ export default function LoginProfile() {
     }
 
     attemptedWalletCreation.current = true;
-    createWallet().catch(() => {});
-  }, [authenticated, createWallet, ready, solanaWallet, user]);
+    createWallet()
+      .then(() => refreshUser())
+      .catch(() => {});
+  }, [authenticated, createWallet, ready, refreshUser, solanaWallet, user]);
 
-  function saveUsername() {
+  async function ensureWalletReady() {
+    if (getSolanaEmbeddedWallet(user)) {
+      return;
+    }
+
+    setPreparingWallet(true);
+
+    try {
+      await createWallet();
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const refreshedUser = await refreshUser();
+
+        if (getSolanaEmbeddedWallet(refreshedUser)) {
+          return;
+        }
+
+        await wait(700);
+      }
+    } finally {
+      setPreparingWallet(false);
+    }
+  }
+
+  async function createUserWhenWalletIsReady(cleanUsername: string) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        return await createUserMutation.mutateAsync({ username: cleanUsername });
+      } catch (createError) {
+        const message = getErrorMessage(createError);
+
+        if (!isWalletNotReadyError(message) || attempt === 3) {
+          throw createError;
+        }
+
+        await refreshUser();
+        await wait(900);
+      }
+    }
+  }
+
+  async function saveUsername() {
     const cleanUsername = username.trim();
 
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(cleanUsername)) {
@@ -74,53 +126,81 @@ export default function LoginProfile() {
       return;
     }
 
-    window.localStorage.setItem(`newtime:username:${user.id}`, cleanUsername);
-    setError("");
-    router.push("/");
+    try {
+      setError("");
+
+      await ensureWalletReady();
+      await createUserWhenWalletIsReady(cleanUsername);
+      router.replace("/");
+    } catch (saveError) {
+      const message = getErrorMessage(saveError);
+
+      if (message === "User already exists") {
+        router.replace("/");
+        return;
+      }
+
+      setError(message);
+    }
   }
 
-  if (!ready) {
-    return <p className="text-sm text-muted-foreground">Loading...</p>;
+  if (!ready || currentUserQuery.isLoading) {
+    return <p className="text-sm text-white/60">Loading...</p>;
   }
 
   if (!authenticated || !user) {
-    return <p className="text-sm text-muted-foreground">Login first.</p>;
+    return <p className="text-sm text-white/60">Login first.</p>;
   }
 
-  if (savedUsername) {
-    return <p className="text-sm text-muted-foreground">Redirecting...</p>;
+  if (currentUserQuery.data?.user) {
+    return <p className="text-sm text-white/60">Redirecting...</p>;
   }
 
   return (
     <form
-      className="grid gap-4"
+      className="mx-auto grid w-full max-w-md gap-7 text-left"
       onSubmit={(event) => {
         event.preventDefault();
         saveUsername();
       }}
     >
-      <div>
-        <p className="text-sm text-muted-foreground">Step 3 of 3</p>
-        <h1 className="mt-1 text-2xl font-semibold">Create a username</h1>
+      <div className="grid gap-4">
+        <h1 className="text-4xl font-semibold leading-tight tracking-normal text-white sm:text-5xl">
+          Create username
+        </h1>
+        <p className="text-base leading-snug text-white/70 sm:text-lg">
+          Pick a username to finish your Worth profile.
+        </p>
       </div>
 
-      <Input
-        placeholder="newtime_user"
-        value={username}
-        onChange={(event) => {
-          setUsername(event.target.value);
-          setError("");
-        }}
-        aria-invalid={Boolean(error)}
-      />
+      <div className="grid gap-4">
+        <Input
+          placeholder="worth_user"
+          value={username}
+          onChange={(event) => {
+            setUsername(event.target.value);
+            setError("");
+          }}
+          aria-invalid={Boolean(error)}
+        />
 
-      <p className="text-sm text-muted-foreground">
-        Use 3-20 letters, numbers, or underscores.
-      </p>
+        <p className="text-sm text-white/55">
+          Use 3-20 letters, numbers, or underscores.
+        </p>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      <Button type="submit">Create username</Button>
+        <Button
+          type="submit"
+          disabled={createUserMutation.isPending || preparingWallet}
+        >
+          {preparingWallet
+            ? "Preparing wallet..."
+            : createUserMutation.isPending
+              ? "Creating..."
+              : "Create username"}
+        </Button>
+      </div>
     </form>
   );
 }

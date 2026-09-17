@@ -22,6 +22,16 @@ function getStoredEmail() {
   return window.sessionStorage.getItem("newtime:email") ?? "";
 }
 
+function maskEmail(email: string) {
+  const [name, domain] = email.split("@");
+
+  if (!name || !domain) {
+    return "your email address";
+  }
+
+  return `${name.charAt(0)}****@${domain}`;
+}
+
 export default function LoginCode() {
   const router = useRouter();
   const { loginWithCode, sendCode } = useLoginWithEmail();
@@ -70,42 +80,66 @@ export default function LoginCode() {
 
   return (
     <form
-      className="grid gap-4"
+      className="mx-auto grid w-full max-w-md gap-7 text-left"
       onSubmit={(event) => {
         event.preventDefault();
         submitCode();
       }}
     >
-      <div>
-        <p className="text-sm text-muted-foreground">Step 2 of 3</p>
-        <h1 className="mt-1 text-2xl font-semibold">Enter the OTP</h1>
+      <div className="grid gap-4">
+        <h1 className="text-3xl font-semibold leading-tight tracking-normal text-white sm:text-5xl">
+          Verify email
+        </h1>
+        <p className="text-base leading-snug text-white/70 sm:text-lg">
+          Enter the 6 digit code sent to your email address
+          <br />
+          <span className="font-semibold text-white/85">
+            {maskEmail(email)}
+          </span>{" "}
+          below.
+        </p>
       </div>
 
-      <InputOTP maxLength={6} value={code} onChange={setCode}>
-        <InputOTPGroup className="gap-2">
+      <InputOTP
+        maxLength={6}
+        value={code}
+        onChange={setCode}
+        containerClassName="w-full"
+      >
+        <InputOTPGroup className="grid w-full grid-cols-6 gap-2 sm:gap-3">
           {Array.from({ length: 6 }).map((_, index) => (
             <InputOTPSlot
               key={index}
               index={index}
-              className="size-10 rounded-lg border bg-background"
+              className="aspect-square h-auto w-full min-w-0 rounded-xl border border-white/5 bg-white/10 text-xl font-medium text-white shadow-none transition-colors data-[active=true]:border-primary-400 data-[active=true]:ring-2 data-[active=true]:ring-primary-400/60 sm:rounded-2xl sm:text-2xl"
             />
           ))}
         </InputOTPGroup>
       </InputOTP>
 
-      <p className="text-sm text-muted-foreground">
-        Sent to {email || "your email"}
-      </p>
+      <div className="grid gap-4">
+        {loading ? (
+          <p className="text-base font-medium text-white/70 sm:text-lg">
+            Verifying your OTP...
+          </p>
+        ) : null}
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      <Button type="submit" disabled={loading || code.length !== 6}>
-        {loading ? "Checking..." : "Verify"}
-      </Button>
+        <Button type="submit" disabled={loading || code.length !== 6}>
+          Verify
+        </Button>
 
-      <Button type="button" variant="ghost" onClick={resendCode} disabled={loading}>
-        Resend OTP
-      </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={resendCode}
+          disabled={loading}
+          className="text-white/70 hover:bg-white/10 hover:text-white"
+        >
+          Resend OTP
+        </Button>
+      </div>
     </form>
   );
 }

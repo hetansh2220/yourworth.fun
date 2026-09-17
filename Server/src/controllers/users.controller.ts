@@ -168,7 +168,12 @@ export async function getUserByUsername(c: Context<AppEnv>) {
 
   try {
     const [user] = await db
-      .select()
+      .select({
+        id: users.id,
+        username: users.username,
+        avatar: users.avatar,
+        createdAt: users.createdAt,
+      })
       .from(users)
       .where(eq(users.username, username))
       .limit(1);
