@@ -59,14 +59,14 @@
 }
 
 :root {
-  --font-system-sans: ui-sans-serif, system-ui, sans-serif;
+    --font-system-sans: ui-sans-serif, system-ui, sans-serif;
   --font-system-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
 --primary-0: oklch(98.28% 0.009 247.91);
 --primary-100: oklch(95.87% 0.021 248.04);
 --primary-200: oklch(91.78% 0.042 248.28);
