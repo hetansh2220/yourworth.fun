@@ -5,10 +5,12 @@ import { useLogout, usePrivy } from "@privy-io/react-auth";
 import { ApiError } from "@/api";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useCurrentUser } from "@/hooks/users/use-current-user";
+import { useRouter } from "next/navigation";
 
 export default function Page() {
   const { ready, authenticated } = usePrivy();
   const { logout } = useLogout();
+  const router = useRouter();
   const currentUserQuery = useCurrentUser();
   const currentUserError = currentUserQuery.error;
   const profileMissing =
@@ -49,15 +51,12 @@ export default function Page() {
             <p className="text-sm text-destructive">Could not load profile.</p>
           ) : null}
 
-          {authenticated ? (
-            <Button size="lg" onClick={() => void logout()}>
-              Logout
-            </Button>
-          ) : (
-            <Link href="/login" className={buttonVariants({ size: "lg" })}>
-              Login
-            </Link>
-          )}
+          <Button
+            size="default"
+            onClick={() => (authenticated ? logout() : router.push("/login"))}
+          >
+            {authenticated ? "Logout" : "Login"}
+          </Button>
         </div>
       </nav>
     </main>
