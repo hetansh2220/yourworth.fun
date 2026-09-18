@@ -2,6 +2,7 @@ import "dotenv/config";
 import { Hono } from "hono";
 import { getUserByUsername } from "./controllers/users.controller";
 import { usersRoute } from "./routes/users";
+import { marketsRoute } from "./routes/markets";
 import type { AppEnv } from "./types/app";
 import { cors } from "hono/cors";
 
@@ -24,6 +25,7 @@ app.get("/", (c) => {
 });
 
 app.route("/users", usersRoute);
+app.route("/markets", marketsRoute);
 app.get("/:username", getUserByUsername);
 
 export default {
