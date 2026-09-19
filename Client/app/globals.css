@@ -3,9 +3,9 @@
 @import "shadcn/tailwind.css";
 
 @font-face {
-  font-family: "Supreme";
-  src: url("https://cdn.fontshare.com/wf/DLQ4UJISF7NR5UWCRH7SSBZSGVFYEQVB/ECAFP4IWEYQWGLRGLDAA4D47EQQC2YFW/WC57ME7FJIJNRKIFOCKR52F2X2KO67EO.woff2") format("woff2");
-  font-weight: 100 800;
+  font-family: "Switzer";
+  src: url("https://cdn.fontshare.com/wf/HJHZ26OECMTXRH7JXPFC7EVIHDSLT2RA/LJRNLR7WCPF3PY3SZ7B2LHNUTQMFNCHL/4MCJYGQDIOOXHWSIIB2OYNDBEALJSOGN.woff2") format("woff2");
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
@@ -67,7 +67,7 @@
 }
 
 :root {
-    --font-system-sans: "Supreme", ui-sans-serif, system-ui, sans-serif;
+    --font-system-sans: "Switzer", ui-sans-serif, system-ui, sans-serif;
   --font-system-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

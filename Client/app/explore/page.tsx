@@ -5,6 +5,7 @@ import { ArrowUpRight, Flame, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { HeroCreatorTile } from "@/components/explore/hero-creator-tile";
+import { Navbar } from "@/components/layout/navbar";
 import { CategoryNav } from "@/components/explore/category-nav";
 import {
     CreatorCard,
@@ -12,26 +13,28 @@ import {
 } from "@/components/explore/creator-card";
 
 const creatorImages = [
-    "https://i.pinimg.com/736x/9c/31/41/9c3141c276232e4f9ea2f9eba3028836.jpg",
-    "https://tse4.mm.bing.net/th/id/OIP.JD7RaPoEbeXyNMf3xE32NgHaI0?r=0&pid=ImgDet&w=184&h=219&c=7&dpr=1.3&o=7&rm=3",
-    "https://tse1.mm.bing.net/th/id/OIP.dRIQgCJ1ExaBxrZwp5LRkQHaJ4?r=0&pid=ImgDet&w=202&h=269&c=7&dpr=1.3&o=7&rm=3",
-    "https://tse4.mm.bing.net/th/id/OIP.Tgv_iBl4QPxqJATW37fPqgAAAA?r=0&pid=ImgDet&w=198&h=223&c=7&dpr=1.3&o=7&rm=3",
-    "https://tse4.mm.bing.net/th/id/OIP.t5ANlYOtbT3aNJNlzoInxQAAAA?r=0&pid=ImgDet&w=191&h=191&c=7&dpr=1.3&o=7&rm=3",
+    "https://pbs.twimg.com/profile_images/2075257710715781123/74AtQPd6_400x400.jpg",
+    "https://pbs.twimg.com/profile_images/1984256809427955712/H9T9bSeV_400x400.jpg",
+    "https://pbs.twimg.com/profile_images/1773988714462461952/woSArAj4_400x400.jpg",
+    "https://pbs.twimg.com/profile_images/1744808919518822400/tYvudcDg_400x400.jpg",
+    "https://pbs.twimg.com/profile_images/1984019963955527680/EHTsBrCQ_400x400.jpg",
+    "https://pbs.twimg.com/profile_images/1975912876243095552/YlVLO4Oz_400x400.jpg",
+    "https://pbs.twimg.com/profile_images/2063909240755159040/tDvFMTN-_400x400.jpg",
 ];
 
 const heroTiles = [
     {
         image: creatorImages[0],
-        className: "hidden -translate-y-[34%] -rotate-3 sm:block",
+        className: "hidden -translate-y-[22%] -rotate-3 sm:block",
     },
-    { image: creatorImages[1], className: "-translate-y-[22%] -rotate-2" },
-    { image: creatorImages[2], className: "-translate-y-[12%] -rotate-1" },
-    { image: creatorImages[3], className: "-translate-y-[6%]" },
-    { image: creatorImages[4], className: "-translate-y-[12%] rotate-1" },
-    { image: creatorImages[0], className: "-translate-y-[22%] rotate-2" },
+    { image: creatorImages[1], className: "-translate-y-[14%] -rotate-2" },
+    { image: creatorImages[2], className: "-translate-y-[7%] -rotate-1" },
+    { image: creatorImages[3], className: "translate-y-0" },
+    { image: creatorImages[4], className: "-translate-y-[7%] rotate-1" },
+    { image: creatorImages[5], className: "-translate-y-[14%] rotate-2" },
     {
-        image: creatorImages[1],
-        className: "hidden -translate-y-[34%] rotate-3 sm:block",
+        image: creatorImages[6],
+        className: "hidden -translate-y-[22%] rotate-3 sm:block",
     },
 ];
 
@@ -98,45 +101,9 @@ const topCreators: CreatorCardProps[] = [
 export default function ExplorePage() {
     return (
         <main className="min-h-screen overflow-x-hidden bg-[#050505] text-[#F5F7FA]">
-            <nav className="border-b border-[#24262B] bg-[#050505]">
-                <div className="mx-auto flex h-[72px] max-w-[1400px] items-center justify-between px-5 sm:px-8">
-                    <Link
-                        href="/explore"
-                        className="text-xl font-bold tracking-[0.18em]"
-                    >
-                        <span className="text-[#79AFFF]">W</span>ORTH
-                    </Link>
+            <Navbar />
 
-                    <div className="hidden items-center gap-7 text-sm md:flex">
-                        <Link
-                            href="/explore"
-                            className="text-[#F5F7FA] hover:text-[#79AFFF]"
-                        >
-                            Explore
-                        </Link>
-
-                        <Link
-                            href="/portfolio"
-                            className="text-[#8B9099] hover:text-[#79AFFF]"
-                        >
-                            Portfolio
-                        </Link>
-
-                        <Link
-                            href="/community"
-                            className="text-[#8B9099] hover:text-[#79AFFF]"
-                        >
-                            Community
-                        </Link>
-                    </div>
-
-                    <Link href="/login">
-                        <Button>Login</Button>
-                    </Link>
-                </div>
-            </nav>
-
-            <section className="relative overflow-hidden border-b border-[#24262B] bg-[#050505]">
+            <section className="relative min-h-[calc(100svh-72px)] overflow-hidden border-b border-[#24262B] bg-[#050505]">
                 <div
                     className="pointer-events-none absolute inset-0 opacity-30"
                     style={{
@@ -148,19 +115,18 @@ export default function ExplorePage() {
                     }}
                 />
 
-                <div className="relative z-20 mx-auto flex max-w-[1400px] flex-col items-center px-5 pb-[130px] pt-14 text-center sm:px-8 sm:pb-[200px] md:pb-[280px] lg:pb-[360px] lg:pt-10">
-                    <h1 className="text-5xl font-semibold leading-[1.05] tracking-[-0.055em] sm:text-6xl lg:text-7xl">
-                        What's your
+                <div className="relative z-20 mx-auto flex min-h-[calc(100svh-72px)] max-w-[1400px] flex-col items-center px-5 pb-[250px] pt-16 text-center sm:px-8 sm:pb-[290px] sm:pt-20 md:pb-[315px] lg:pb-[345px] lg:pt-[88px] xl:pb-[360px]">
+                    <h1 className="max-w-3xl text-5xl font-semibold leading-[0.96] tracking-normal text-[#F5F7FA] sm:text-6xl md:text-7xl lg:text-8xl">
+                        What&apos;s your
                         <br />
                         <span className="text-primary">time worth?</span>
                     </h1>
 
                     <p className="mt-7 max-w-md text-sm leading-6 text-muted-foreground sm:text-base">
-                        Discover people, explore their value, and access their
-                        time.
+                        Discover people, access their time, and value your own.
                     </p>
 
-                    <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+                    <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
                         <Link href="/explore">
                             <Button>
                                 Explore creators
@@ -179,8 +145,8 @@ export default function ExplorePage() {
                     </div>
                 </div>
 
-                <div className="pointer-events-none absolute inset-x-0 bottom-8 z-10 sm:bottom-14 lg:bottom-30">
-                    <div className="mx-auto grid max-w-[1500px] grid-cols-5 items-end gap-2 px-2 sm:grid-cols-7 sm:gap-3 sm:px-3">
+                <div className="pointer-events-none absolute inset-x-0 bottom-8 z-10 sm:bottom-10 lg:bottom-8 xl:bottom-10">
+                    <div className="mx-auto grid max-w-[1940px] grid-cols-5 items-end gap-2 px-2 sm:grid-cols-7 sm:gap-3 sm:px-3 lg:gap-4">
                         {heroTiles.map((tile, index) => (
                             <HeroCreatorTile
                                 key={index}
