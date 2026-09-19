@@ -2,6 +2,14 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@font-face {
+  font-family: "Supreme";
+  src: url("https://cdn.fontshare.com/wf/DLQ4UJISF7NR5UWCRH7SSBZSGVFYEQVB/ECAFP4IWEYQWGLRGLDAA4D47EQQC2YFW/WC57ME7FJIJNRKIFOCKR52F2X2KO67EO.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -59,7 +67,7 @@
 }
 
 :root {
-    --font-system-sans: ui-sans-serif, system-ui, sans-serif;
+    --font-system-sans: "Supreme", ui-sans-serif, system-ui, sans-serif;
   --font-system-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

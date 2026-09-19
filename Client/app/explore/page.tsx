@@ -6,7 +6,10 @@ import { ArrowUpRight, Flame, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HeroCreatorTile } from "@/components/explore/hero-creator-tile";
 import { CategoryNav } from "@/components/explore/category-nav";
-import { CreatorCard, type CreatorCardProps } from "@/components/explore/creator-card";
+import {
+    CreatorCard,
+    type CreatorCardProps,
+} from "@/components/explore/creator-card";
 
 const creatorImages = [
     "https://i.pinimg.com/736x/9c/31/41/9c3141c276232e4f9ea2f9eba3028836.jpg",
@@ -17,13 +20,19 @@ const creatorImages = [
 ];
 
 const heroTiles = [
-    { image: creatorImages[0], className: "hidden -translate-y-[34%] -rotate-3 sm:block" },
+    {
+        image: creatorImages[0],
+        className: "hidden -translate-y-[34%] -rotate-3 sm:block",
+    },
     { image: creatorImages[1], className: "-translate-y-[22%] -rotate-2" },
     { image: creatorImages[2], className: "-translate-y-[12%] -rotate-1" },
     { image: creatorImages[3], className: "-translate-y-[6%]" },
     { image: creatorImages[4], className: "-translate-y-[12%] rotate-1" },
     { image: creatorImages[0], className: "-translate-y-[22%] rotate-2" },
-    { image: creatorImages[1], className: "hidden -translate-y-[34%] rotate-3 sm:block" },
+    {
+        image: creatorImages[1],
+        className: "hidden -translate-y-[34%] rotate-3 sm:block",
+    },
 ];
 
 const topCreators: CreatorCardProps[] = [
@@ -61,7 +70,8 @@ const topCreators: CreatorCardProps[] = [
         rating: 4.89,
         price: "$6.20",
         change: 24.15,
-        description: "Electronic music producer, audio engineer, and sound artist.",
+        description:
+            "Electronic music producer, audio engineer, and sound artist.",
     },
     {
         name: "Kenji Sato",
@@ -70,7 +80,8 @@ const topCreators: CreatorCardProps[] = [
         rating: 4.97,
         price: "$12.00",
         change: 6.8,
-        description: "Solana core dev and high-frequency trading protocol engineer.",
+        description:
+            "Solana core dev and high-frequency trading protocol engineer.",
     },
     {
         name: "Chloe Chen",
@@ -79,7 +90,8 @@ const topCreators: CreatorCardProps[] = [
         rating: 4.93,
         price: "$10.50",
         change: 12.3,
-        description: "Creative director & growth strategist for next-gen consumer apps.",
+        description:
+            "Creative director & growth strategist for next-gen consumer apps.",
     },
 ];
 
@@ -119,9 +131,7 @@ export default function ExplorePage() {
                     </div>
 
                     <Link href="/login">
-                        <Button>
-                            Login
-                        </Button>
+                        <Button>Login</Button>
                     </Link>
                 </div>
             </nav>
@@ -133,25 +143,21 @@ export default function ExplorePage() {
                         backgroundImage:
                             "linear-gradient(#24262B 1px, transparent 1px), linear-gradient(90deg, #24262B 1px, transparent 1px)",
                         backgroundSize: "64px 64px",
-                        maskImage: "linear-gradient(to bottom, black, transparent)",
+                        maskImage:
+                            "linear-gradient(to bottom, black, transparent)",
                     }}
                 />
 
                 <div className="relative z-20 mx-auto flex max-w-[1400px] flex-col items-center px-5 pb-[130px] pt-14 text-center sm:px-8 sm:pb-[200px] md:pb-[280px] lg:pb-[360px] lg:pt-10">
-                    <p className="mb-6 text-xs font-semibold uppercase tracking-[0.3em] text-[#505050]">
-                        WORTH / TIME MARKETPLACE
-                    </p>
-
                     <h1 className="text-5xl font-semibold leading-[1.05] tracking-[-0.055em] sm:text-6xl lg:text-7xl">
-                        WHAT'S YOUR
+                        What's your
                         <br />
-                        <span className="text-primary">
-                            TIME WORTH?
-                        </span>
+                        <span className="text-primary">time worth?</span>
                     </h1>
 
                     <p className="mt-7 max-w-md text-sm leading-6 text-muted-foreground sm:text-base">
-                        Discover people, explore their value, and access their time.
+                        Discover people, explore their value, and access their
+                        time.
                     </p>
 
                     <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
