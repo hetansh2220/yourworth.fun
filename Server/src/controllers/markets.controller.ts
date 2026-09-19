@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { desc, eq, lt } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
@@ -20,7 +20,7 @@ function getErrorCode(error: unknown) {
     : "";
 }
 
-function toPrice(value: number) {
+function toAmount(value: number) {
   return value.toFixed(2);
 }
 
@@ -44,10 +44,8 @@ function getCursor(c: Context<AppEnv>) {
 const marketWithUserFields = {
   id: markets.id,
   dmPaymentType: markets.dmPaymentType,
-  dmPrice: markets.dmPriceUsdc,
-  groupPaymentType: markets.groupPaymentType,
-  groupPrice: markets.groupPriceUsdc,
-  isActive: markets.isActive,
+  dmPrice: markets.dmPrice,
+  groupPrice: markets.groupPrice,
   createdAt: markets.createdAt,
   updatedAt: markets.updatedAt,
   user: {
@@ -122,9 +120,8 @@ export async function createMarket(c: Context<AppEnv>) {
     await db.insert(markets).values({
       userId: user.id,
       dmPaymentType: parsedBody.data.dmPaymentType,
-      dmPriceUsdc: toPrice(parsedBody.data.dmPrice),
-      groupPaymentType: parsedBody.data.groupPaymentType,
-      groupPriceUsdc: toPrice(parsedBody.data.groupPrice),
+      dmPrice: toAmount(parsedBody.data.dmPrice),
+      groupPrice: toAmount(parsedBody.data.groupPrice),
     });
 
     const market = await getMarketByUserId(user.id);
@@ -170,14 +167,13 @@ export async function getMarkets(c: Context<AppEnv>) {
           .select(marketWithUserFields)
           .from(markets)
           .innerJoin(users, eq(markets.userId, users.id))
-          .where(and(eq(markets.isActive, true), lt(markets.createdAt, cursor)))
+          .where(lt(markets.createdAt, cursor))
           .orderBy(desc(markets.createdAt))
           .limit(limit + 1)
       : await db
           .select(marketWithUserFields)
           .from(markets)
           .innerJoin(users, eq(markets.userId, users.id))
-          .where(eq(markets.isActive, true))
           .orderBy(desc(markets.createdAt))
           .limit(limit + 1);
 
@@ -226,7 +222,7 @@ export async function getMarket(c: Context<AppEnv>) {
       .select(marketWithUserFields)
       .from(markets)
       .innerJoin(users, eq(markets.userId, users.id))
-      .where(and(eq(markets.id, parsedId.data), eq(markets.isActive, true)))
+      .where(eq(markets.id, parsedId.data))
       .limit(1);
 
     if (!market) {
@@ -352,19 +348,11 @@ export async function updateMarket(c: Context<AppEnv>) {
     }
 
     if (parsedBody.data.dmPrice !== undefined) {
-      updateValues.dmPriceUsdc = toPrice(parsedBody.data.dmPrice);
-    }
-
-    if (parsedBody.data.groupPaymentType) {
-      updateValues.groupPaymentType = parsedBody.data.groupPaymentType;
+      updateValues.dmPrice = toAmount(parsedBody.data.dmPrice);
     }
 
     if (parsedBody.data.groupPrice !== undefined) {
-      updateValues.groupPriceUsdc = toPrice(parsedBody.data.groupPrice);
-    }
-
-    if (parsedBody.data.isActive !== undefined) {
-      updateValues.isActive = parsedBody.data.isActive;
+      updateValues.groupPrice = toAmount(parsedBody.data.groupPrice);
     }
 
     const [updatedMarket] = await db
