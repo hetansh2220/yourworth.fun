@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLoginWithEmail } from "@privy-io/react-auth";
+import LoginProfile from "@/components/auth/login-profile";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -61,7 +62,7 @@ function maskEmail(email: string) {
   return `${name.charAt(0)}****@${domain}`;
 }
 
-export default function LoginCode({ onVerified }: { onVerified: () => void }) {
+export default function LoginCode() {
   const router = useRouter();
   const { loginWithCode, sendCode } = useLoginWithEmail();
   const [email] = useState(getStoredEmail);
@@ -73,6 +74,12 @@ export default function LoginCode({ onVerified }: { onVerified: () => void }) {
   useEffect(() => {
     router.prefetch("/login?step=profile");
   }, [router]);
+
+  useEffect(() => {
+    if (!email) {
+      router.replace("/login");
+    }
+  }, [email, router]);
 
   async function submitCode() {
     if (code.length !== 6) {
@@ -87,7 +94,7 @@ export default function LoginCode({ onVerified }: { onVerified: () => void }) {
       await loginWithCode({ code });
       window.sessionStorage.removeItem("newtime:email");
       setFinishingLogin(true);
-      onVerified();
+      router.replace("/login?step=profile", { scroll: false });
     } catch (loginError) {
       setError(getErrorMessage(loginError));
       setLoading(false);
@@ -114,8 +121,8 @@ export default function LoginCode({ onVerified }: { onVerified: () => void }) {
     }
   }
 
-  if (finishingLogin) {
-    return <LoginCodeSkeleton />;
+  if (!email || finishingLogin) {
+    return finishingLogin ? <LoginProfile /> : <LoginCodeSkeleton />;
   }
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import LoginCode from "@/components/auth/login-code";
 import LoginEmail from "@/components/auth/login-email";
 import LoginProfile from "@/components/auth/login-profile";
@@ -23,22 +23,14 @@ function LoginPageSkeleton() {
 }
 
 function LoginFlow() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const urlStep = searchParams.get("step") ?? "email";
-  const [stepOverride, setStepOverride] = useState<string | null>(null);
-  const step = stepOverride ?? urlStep;
-
-  function completeCodeLogin() {
-    setStepOverride("profile");
-    router.replace("/login?step=profile", { scroll: false });
-  }
+  const step = searchParams.get("step") ?? "email";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-black px-5 py-10 text-white">
       <section className="w-full max-w-2xl">
         {step === "code" ? (
-          <LoginCode onVerified={completeCodeLogin} />
+          <LoginCode />
         ) : step === "profile" ? (
           <LoginProfile />
         ) : (

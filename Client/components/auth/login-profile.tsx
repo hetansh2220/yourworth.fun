@@ -358,6 +358,16 @@ export default function LoginProfile() {
       return;
     }
 
+    if (usernameCheckFailed) {
+      setError("Could not check username. Try again.");
+      return;
+    }
+
+    if (!usernameAvailable) {
+      setError("Choose an available username.");
+      return;
+    }
+
     try {
       setError("");
 
@@ -383,7 +393,7 @@ export default function LoginProfile() {
     (currentUserQuery.isLoading && !profileMissing) ||
     (currentUserQuery.isFetching && !profileMissing);
 
-  if (checkingProfile) {
+  if (checkingProfile || currentUserQuery.data?.user) {
     return <LoginProfileSkeleton />;
   }
 
@@ -514,6 +524,8 @@ export default function LoginProfile() {
             bio.trim().length > 160 ||
             !isValidUsername ||
             usernameCheckPending ||
+            usernameCheckFailed ||
+            !usernameAvailable ||
             usernameTaken
           }
         >
