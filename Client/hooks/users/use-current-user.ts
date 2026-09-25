@@ -7,15 +7,16 @@ import { requireAccessToken } from "./require-access-token";
 import { userKeys } from "./user-keys";
 
 export function useCurrentUser() {
-  const { authenticated, getAccessToken } = usePrivy();
+  const { ready, authenticated, getAccessToken, user } = usePrivy();
+  const privyUserId = user?.id;
 
   return useQuery({
-    queryKey: userKeys.me(),
+    queryKey: userKeys.me(privyUserId),
     queryFn: async () => {
       const token = await requireAccessToken(getAccessToken);
       return usersApi.getMe(token);
     },
-    enabled: authenticated,
+    enabled: ready && authenticated && Boolean(privyUserId),
     retry: false,
   });
 }

@@ -9,7 +9,7 @@ import { userKeys } from "./user-keys";
 
 export function useUpdateUser() {
   const queryClient = useQueryClient();
-  const { getAccessToken } = usePrivy();
+  const { getAccessToken, user } = usePrivy();
 
   return useMutation({
     mutationFn: async (input: UpdateUserInput) => {
@@ -17,7 +17,7 @@ export function useUpdateUser() {
       return usersApi.updateUser(input, token);
     },
     onSuccess: (response) => {
-      queryClient.setQueryData(userKeys.me(), response);
+      queryClient.setQueryData(userKeys.me(user?.id), response);
       void queryClient.invalidateQueries({ queryKey: userKeys.lists() });
       void queryClient.invalidateQueries({
         queryKey: userKeys.byUsername(response.user.username),

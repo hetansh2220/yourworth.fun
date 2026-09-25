@@ -28,14 +28,23 @@ export async function apiFetch<T>(
   path: string,
   { body, token, headers, ...options }: ApiFetchOptions = {}
 ): Promise<T> {
+  const isFormData = body instanceof FormData;
+
   const response = await fetch(createUrl(path), {
     ...options,
     headers: {
-      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(body === undefined || isFormData
+        ? {}
+        : { "Content-Type": "application/json" }),
       ...headers,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body:
+      body === undefined
+        ? undefined
+        : isFormData
+          ? body
+          : JSON.stringify(body),
   });
 
   const data = await response.json().catch(() => null);

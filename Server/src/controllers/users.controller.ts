@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { desc, eq, lt } from "drizzle-orm";
 
 import { db } from "../db";
+import { uploadAvatarFile } from "../lib/upload-avatar";
 import { createUserSchema, updateUserSchema, users } from "../db/schema";
 import type { AppEnv } from "../types/app";
 
@@ -19,8 +20,25 @@ function getUsernameParam(c: Context<AppEnv>) {
 }
 
 export async function createUser(c: Context<AppEnv>) {
-  const body = await c.req.json().catch(() => null);
-  const parsedBody = createUserSchema.safeParse(body);
+  const formData = await c.req.formData().catch(() => null);
+
+  if (!formData) {
+    return c.json(
+      {
+        success: false,
+        message: "Invalid form data",
+      },
+      400
+    );
+  }
+
+  const username = formData.get("username");
+  const bio = formData.get("bio");
+  const avatar = formData.get("avatar");
+  const parsedBody = createUserSchema.safeParse({
+    username: typeof username === "string" ? username : "",
+    bio: typeof bio === "string" ? bio : "",
+  });
 
   if (!parsedBody.success) {
     return c.json(
@@ -32,10 +50,21 @@ export async function createUser(c: Context<AppEnv>) {
     );
   }
 
+  if (!(avatar instanceof File) || avatar.size === 0) {
+    return c.json(
+      {
+        success: false,
+        message: "Avatar image is required",
+      },
+      400
+    );
+  }
+
   try {
     const privyUserId = c.get("privyUserId");
     const walletAddress = c.get("walletAddress");
     const cleanUsername = parsedBody.data.username.trim().toLowerCase();
+    const cleanBio = parsedBody.data.bio.trim();
 
     const [existingUser] = await db
       .select()
@@ -70,9 +99,7 @@ export async function createUser(c: Context<AppEnv>) {
       );
     }
 
-    const avatar = `https://api.dicebear.com/10.x/waves/svg?seed=${encodeURIComponent(
-      cleanUsername
-    )}`;
+    const uploadedAvatar = await uploadAvatarFile(avatar);
 
     const [newUser] = await db
       .insert(users)
@@ -80,7 +107,8 @@ export async function createUser(c: Context<AppEnv>) {
         privyUserId,
         username: cleanUsername,
         walletAddress,
-        avatar,
+        avatar: uploadedAvatar.secure_url,
+        bio: cleanBio,
       })
       .returning();
 
@@ -103,6 +131,38 @@ export async function createUser(c: Context<AppEnv>) {
         },
         409
       );
+    }
+
+    if (error instanceof Error) {
+      if (error.message === "Avatar must be an image") {
+        return c.json(
+          {
+            success: false,
+            message: error.message,
+          },
+          400
+        );
+      }
+
+      if (error.message === "Avatar must be smaller than 5MB") {
+        return c.json(
+          {
+            success: false,
+            message: error.message,
+          },
+          413
+        );
+      }
+
+      if (error.message === "Missing CLOUDINARY_UPLOAD_PRESET") {
+        return c.json(
+          {
+            success: false,
+            message: "Avatar upload is not configured",
+          },
+          500
+        );
+      }
     }
 
     return c.json(
@@ -173,6 +233,7 @@ export async function getUserByUsername(c: Context<AppEnv>) {
         id: users.id,
         username: users.username,
         avatar: users.avatar,
+        bio: users.bio,
         createdAt: users.createdAt,
       })
       .from(users)
@@ -221,6 +282,7 @@ export async function getUsers(c: Context<AppEnv>) {
     id: users.id,
     username: users.username,
     avatar: users.avatar,
+    bio: users.bio,
     createdAt: users.createdAt,
   };
 
@@ -289,6 +351,10 @@ export async function updateUser(c: Context<AppEnv>) {
 
   if (parsedBody.data.avatar) {
     updateValues.avatar = parsedBody.data.avatar;
+  }
+
+  if (parsedBody.data.bio) {
+    updateValues.bio = parsedBody.data.bio.trim();
   }
 
   if (Object.keys(updateValues).length === 0) {

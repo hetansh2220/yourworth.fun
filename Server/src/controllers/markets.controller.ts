@@ -52,6 +52,7 @@ const marketWithUserFields = {
     id: users.id,
     username: users.username,
     avatar: users.avatar,
+    bio: users.bio,
   },
 };
 

@@ -4,6 +4,7 @@ export type PublicUser = {
   id: string;
   username: string;
   avatar: string;
+  bio: string;
   createdAt: string;
 };
 
@@ -27,9 +28,12 @@ export type PublicUserResponse = ApiSuccess<{
 
 export type CreateUserInput = {
   username: string;
+  avatar: File;
+  bio: string;
 };
 
 export type UpdateUserInput = {
   username?: string;
   avatar?: string;
+  bio?: string;
 };
