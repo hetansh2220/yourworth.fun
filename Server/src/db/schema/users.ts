@@ -25,7 +25,15 @@ export const users = pgTable("users", {
 
   bio: text("bio").notNull().default(""),
 
+  token: text("token").notNull().default(""),
+
   createdAt: timestamp("created_at", {
+    withTimezone: true,
+  })
+    .defaultNow()
+    .notNull(),
+
+  updatedAt: timestamp("updated_at", {
     withTimezone: true,
   })
     .defaultNow()

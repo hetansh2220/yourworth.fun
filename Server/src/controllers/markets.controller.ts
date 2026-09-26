@@ -1,12 +1,12 @@
 import type { Context } from "hono";
-import { desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, lt } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
 import {
-  createMarketSchema,
+  marketSchema,
   markets,
-  updateMarketSchema,
+  marketTypeSchema,
   users,
 } from "../db/schema";
 import type { AppEnv } from "../types/app";
@@ -18,10 +18,6 @@ function getErrorCode(error: unknown) {
     typeof error.code === "string"
     ? error.code
     : "";
-}
-
-function toAmount(value: number) {
-  return value.toFixed(2);
 }
 
 function getLimit(c: Context<AppEnv>) {
@@ -41,11 +37,20 @@ function getCursor(c: Context<AppEnv>) {
     : null;
 }
 
+function getMarketTypeQuery(c: Context<AppEnv>) {
+  const marketType = c.req.query("marketType");
+
+  if (!marketType) {
+    return null;
+  }
+
+  return marketTypeSchema.safeParse(marketType);
+}
+
 const marketWithUserFields = {
   id: markets.id,
-  dmPaymentType: markets.dmPaymentType,
-  dmPrice: markets.dmPrice,
-  groupPrice: markets.groupPrice,
+  marketType: markets.marketType,
+  paymentType: markets.paymentType,
   createdAt: markets.createdAt,
   updatedAt: markets.updatedAt,
   user: {
@@ -66,21 +71,33 @@ async function getCurrentUser(privyUserId: string) {
   return user;
 }
 
-async function getMarketByUserId(userId: string) {
+async function getMarketByUserAndType(
+  userId: string,
+  marketType: "dm" | "group"
+) {
   const [market] = await db
     .select(marketWithUserFields)
     .from(markets)
     .innerJoin(users, eq(markets.userId, users.id))
-    .where(eq(markets.userId, userId))
+    .where(and(eq(markets.userId, userId), eq(markets.marketType, marketType)))
     .limit(1);
 
   return market;
 }
 
+async function getMarketsByUserId(userId: string) {
+  return db
+    .select(marketWithUserFields)
+    .from(markets)
+    .innerJoin(users, eq(markets.userId, users.id))
+    .where(eq(markets.userId, userId))
+    .orderBy(desc(markets.createdAt));
+}
+
 export async function createMarket(c: Context<AppEnv>) {
   const privyUserId = c.get("privyUserId");
   const body = await c.req.json().catch(() => null);
-  const parsedBody = createMarketSchema.safeParse(body);
+  const parsedBody = marketSchema.safeParse(body);
 
   if (!parsedBody.success) {
     return c.json(
@@ -105,7 +122,10 @@ export async function createMarket(c: Context<AppEnv>) {
       );
     }
 
-    const existingMarket = await getMarketByUserId(user.id);
+    const existingMarket = await getMarketByUserAndType(
+      user.id,
+      parsedBody.data.marketType
+    );
 
     if (existingMarket) {
       return c.json(
@@ -120,12 +140,14 @@ export async function createMarket(c: Context<AppEnv>) {
 
     await db.insert(markets).values({
       userId: user.id,
-      dmPaymentType: parsedBody.data.dmPaymentType,
-      dmPrice: toAmount(parsedBody.data.dmPrice),
-      groupPrice: toAmount(parsedBody.data.groupPrice),
+      marketType: parsedBody.data.marketType,
+      paymentType: parsedBody.data.paymentType,
     });
 
-    const market = await getMarketByUserId(user.id);
+    const market = await getMarketByUserAndType(
+      user.id,
+      parsedBody.data.marketType
+    );
 
     return c.json(
       {
@@ -161,22 +183,49 @@ export async function createMarket(c: Context<AppEnv>) {
 export async function getMarkets(c: Context<AppEnv>) {
   const limit = getLimit(c);
   const cursor = getCursor(c);
+  const parsedMarketType = getMarketTypeQuery(c);
+
+  if (parsedMarketType && !parsedMarketType.success) {
+    return c.json(
+      {
+        success: false,
+        message: "Market type is invalid",
+      },
+      400
+    );
+  }
 
   try {
+    const marketType = parsedMarketType?.data;
     const marketList = cursor
       ? await db
           .select(marketWithUserFields)
           .from(markets)
           .innerJoin(users, eq(markets.userId, users.id))
-          .where(lt(markets.createdAt, cursor))
+          .where(
+            marketType
+              ? and(
+                  lt(markets.createdAt, cursor),
+                  eq(markets.marketType, marketType)
+                )
+              : lt(markets.createdAt, cursor)
+          )
           .orderBy(desc(markets.createdAt))
           .limit(limit + 1)
-      : await db
-          .select(marketWithUserFields)
-          .from(markets)
-          .innerJoin(users, eq(markets.userId, users.id))
-          .orderBy(desc(markets.createdAt))
-          .limit(limit + 1);
+      : marketType
+        ? await db
+            .select(marketWithUserFields)
+            .from(markets)
+            .innerJoin(users, eq(markets.userId, users.id))
+            .where(eq(markets.marketType, marketType))
+            .orderBy(desc(markets.createdAt))
+            .limit(limit + 1)
+        : await db
+            .select(marketWithUserFields)
+            .from(markets)
+            .innerJoin(users, eq(markets.userId, users.id))
+            .orderBy(desc(markets.createdAt))
+            .limit(limit + 1);
 
     const visibleMarkets = marketList.slice(0, limit);
     const lastMarket = visibleMarkets.at(-1);
@@ -257,6 +306,17 @@ export async function getMarket(c: Context<AppEnv>) {
 
 export async function getMyMarket(c: Context<AppEnv>) {
   const privyUserId = c.get("privyUserId");
+  const parsedMarketType = getMarketTypeQuery(c);
+
+  if (parsedMarketType && !parsedMarketType.success) {
+    return c.json(
+      {
+        success: false,
+        message: "Market type is invalid",
+      },
+      400
+    );
+  }
 
   try {
     const user = await getCurrentUser(privyUserId);
@@ -271,22 +331,34 @@ export async function getMyMarket(c: Context<AppEnv>) {
       );
     }
 
-    const market = await getMarketByUserId(user.id);
+    if (parsedMarketType?.data) {
+      const market = await getMarketByUserAndType(user.id, parsedMarketType.data);
 
-    if (!market) {
+      if (!market) {
+        return c.json(
+          {
+            success: false,
+            message: "Market not found",
+          },
+          404
+        );
+      }
+
       return c.json(
         {
-          success: false,
-          message: "Market not found",
+          success: true,
+          market,
         },
-        404
+        200
       );
     }
+
+    const marketList = await getMarketsByUserId(user.id);
 
     return c.json(
       {
         success: true,
-        market,
+        markets: marketList,
       },
       200
     );
@@ -305,23 +377,13 @@ export async function getMyMarket(c: Context<AppEnv>) {
 export async function updateMarket(c: Context<AppEnv>) {
   const privyUserId = c.get("privyUserId");
   const body = await c.req.json().catch(() => null);
-  const parsedBody = updateMarketSchema.safeParse(body);
+  const parsedBody = marketSchema.safeParse(body);
 
   if (!parsedBody.success) {
     return c.json(
       {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
-      },
-      400
-    );
-  }
-
-  if (Object.keys(parsedBody.data).length === 0) {
-    return c.json(
-      {
-        success: false,
-        message: "Nothing to update",
       },
       400
     );
@@ -340,26 +402,18 @@ export async function updateMarket(c: Context<AppEnv>) {
       );
     }
 
-    const updateValues: Partial<typeof markets.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-
-    if (parsedBody.data.dmPaymentType) {
-      updateValues.dmPaymentType = parsedBody.data.dmPaymentType;
-    }
-
-    if (parsedBody.data.dmPrice !== undefined) {
-      updateValues.dmPrice = toAmount(parsedBody.data.dmPrice);
-    }
-
-    if (parsedBody.data.groupPrice !== undefined) {
-      updateValues.groupPrice = toAmount(parsedBody.data.groupPrice);
-    }
-
     const [updatedMarket] = await db
       .update(markets)
-      .set(updateValues)
-      .where(eq(markets.userId, user.id))
+      .set({
+        paymentType: parsedBody.data.paymentType,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(markets.userId, user.id),
+          eq(markets.marketType, parsedBody.data.marketType)
+        )
+      )
       .returning({ id: markets.id });
 
     if (!updatedMarket) {
@@ -372,7 +426,10 @@ export async function updateMarket(c: Context<AppEnv>) {
       );
     }
 
-    const market = await getMarketByUserId(user.id);
+    const market = await getMarketByUserAndType(
+      user.id,
+      parsedBody.data.marketType
+    );
 
     return c.json(
       {
