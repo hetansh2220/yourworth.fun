@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
 import { AppPrivyProvider } from "@/providers/privy-provider";
+import { ProfileRedirectGuard } from "@/components/auth/profile-redirect-guard";
 
 export const metadata: Metadata = {
-  title: "newtime.fun",
-  description: "Privy auth with embedded wallets",
+  title: "Worth",
+  description: "What's your time worth?",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -13,7 +15,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <AppPrivyProvider>
-          <QueryProvider>{children}</QueryProvider>
+          <QueryProvider>
+            <Suspense fallback={null}>
+              <ProfileRedirectGuard />
+            </Suspense>
+            {children}
+          </QueryProvider>
         </AppPrivyProvider>
       </body>
     </html>

@@ -23,7 +23,17 @@ export const users = pgTable("users", {
 
   avatar: text("avatar").notNull(),
 
+  bio: text("bio").notNull().default(""),
+
+  token: text("token").notNull().default(""),
+
   createdAt: timestamp("created_at", {
+    withTimezone: true,
+  })
+    .defaultNow()
+    .notNull(),
+
+  updatedAt: timestamp("updated_at", {
     withTimezone: true,
   })
     .defaultNow()
@@ -37,20 +47,26 @@ const usernameSchema = z
   .max(20)
   .regex(/^[a-zA-Z0-9_]+$/);
 
+const bioSchema = z.string().trim().min(1).max(160);
+
 export const createUserSchema = createInsertSchema(users)
   .pick({
     username: true,
+    bio: true,
   })
   .extend({
     username: usernameSchema,
+    bio: bioSchema,
   });
 
 export const updateUserSchema = createInsertSchema(users)
   .pick({
     username: true,
     avatar: true,
+    bio: true,
   })
   .extend({
     username: usernameSchema.optional(),
     avatar: z.string().url().optional(),
+    bio: bioSchema.optional(),
   });

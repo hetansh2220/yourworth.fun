@@ -38,9 +38,14 @@ export const usersApi = {
   },
 
   createUser(input: CreateUserInput, token: string) {
+    const formData = new FormData();
+    formData.set("username", input.username);
+    formData.set("bio", input.bio);
+    formData.set("avatar", input.avatar);
+
     return apiFetch<UserResponse>("/users", {
       method: "POST",
-      body: input,
+      body: formData,
       token,
     });
   },

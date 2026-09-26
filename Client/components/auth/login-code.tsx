@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLoginWithEmail } from "@privy-io/react-auth";
+import LoginProfile from "@/components/auth/login-profile";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   InputOTP,
   InputOTPGroup,
@@ -20,6 +22,34 @@ function getStoredEmail() {
   }
 
   return window.sessionStorage.getItem("newtime:email") ?? "";
+}
+
+function LoginCodeSkeleton() {
+  return (
+    <div className="mx-auto grid w-full max-w-md gap-7">
+      <div className="grid gap-4">
+        <Skeleton className="h-12 w-56 bg-white/10" />
+        <div className="grid gap-2">
+          <Skeleton className="h-5 w-full bg-white/10" />
+          <Skeleton className="h-5 w-2/3 bg-white/10" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-6 gap-2 sm:gap-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Skeleton
+            key={index}
+            className="aspect-square h-auto w-full rounded-xl bg-white/10 sm:rounded-2xl"
+          />
+        ))}
+      </div>
+
+      <div className="grid gap-4">
+        <Skeleton className="h-14 w-full rounded-2xl bg-white/10" />
+        <Skeleton className="mx-auto h-5 w-24 bg-white/10" />
+      </div>
+    </div>
+  );
 }
 
 function maskEmail(email: string) {
@@ -39,6 +69,17 @@ export default function LoginCode() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [finishingLogin, setFinishingLogin] = useState(false);
+
+  useEffect(() => {
+    router.prefetch("/login?step=profile");
+  }, [router]);
+
+  useEffect(() => {
+    if (!email) {
+      router.replace("/login");
+    }
+  }, [email, router]);
 
   async function submitCode() {
     if (code.length !== 6) {
@@ -52,11 +93,12 @@ export default function LoginCode() {
     try {
       await loginWithCode({ code });
       window.sessionStorage.removeItem("newtime:email");
-      router.push("/login?step=profile");
+      setFinishingLogin(true);
+      router.replace("/login?step=profile", { scroll: false });
     } catch (loginError) {
       setError(getErrorMessage(loginError));
-    } finally {
       setLoading(false);
+      setFinishingLogin(false);
     }
   }
 
@@ -77,6 +119,10 @@ export default function LoginCode() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!email || finishingLogin) {
+    return finishingLogin ? <LoginProfile /> : <LoginCodeSkeleton />;
   }
 
   return (
@@ -119,11 +165,7 @@ export default function LoginCode() {
       </InputOTP>
 
       <div className="grid gap-4">
-        {loading ? (
-          <p className="text-base font-medium text-white/70 sm:text-lg">
-            Verifying your OTP...
-          </p>
-        ) : null}
+        {loading ? <Skeleton className="h-5 w-40 bg-white/10" /> : null}
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 

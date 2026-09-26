@@ -9,7 +9,7 @@ import { userKeys } from "./user-keys";
 
 export function useCreateUser() {
   const queryClient = useQueryClient();
-  const { getAccessToken } = usePrivy();
+  const { getAccessToken, user } = usePrivy();
 
   return useMutation({
     mutationFn: async (input: CreateUserInput) => {
@@ -17,7 +17,7 @@ export function useCreateUser() {
       return usersApi.createUser(input, token);
     },
     onSuccess: (response) => {
-      queryClient.setQueryData(userKeys.me(), response);
+      queryClient.setQueryData(userKeys.me(user?.id), response);
       void queryClient.invalidateQueries({ queryKey: userKeys.lists() });
       void queryClient.invalidateQueries({
         queryKey: userKeys.byUsername(response.user.username),

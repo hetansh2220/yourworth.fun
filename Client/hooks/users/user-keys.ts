@@ -5,5 +5,6 @@ export const userKeys = {
     [...userKeys.all, "username", username.toLowerCase()] as const,
   availability: (username: string) =>
     [...userKeys.all, "availability", username.toLowerCase()] as const,
-  me: () => [...userKeys.all, "me"] as const,
+  me: (privyUserId?: string | null) =>
+    [...userKeys.all, "me", privyUserId ?? "anonymous"] as const,
 };
