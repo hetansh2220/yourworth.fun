@@ -17,11 +17,12 @@ export function Navbar() {
     const currentUserError = currentUserQuery.error;
     const profileMissing =
         currentUserError instanceof ApiError && currentUserError.status === 404;
+    const user = currentUserQuery.data?.user;
 
     return (
         <nav className="border-b border-[#24262B] bg-[#050505]">
             <div className="mx-auto flex h-[72px] max-w-[1400px] items-center justify-between px-5 sm:px-8">
-                <Link href="/explore" className="flex items-center">
+                <Link href="/" className="flex items-center">
                     <Image
                         src="/brand/logo.png"
                         alt="Worth"
@@ -33,11 +34,19 @@ export function Navbar() {
                 </Link>
 
                 <div className="flex items-center gap-3">
-                    {ready && authenticated && currentUserQuery.data?.user ? (
-                        <p className="hidden text-sm text-white/55 sm:block">
-                            {currentUserQuery.data.user.username}
-                        </p>
-                    ) : null}
+                    {ready && authenticated && user && (
+                        <Link
+                            href="/dashboard"
+                            className="flex items-center gap-2.5 rounded-xl border border-[#24262B] bg-[#0D0D0F] px-3.5 py-2 transition-all hover:border-[#79AFFF]/40 hover:bg-[#151518]"
+                        >
+                            <div className="flex size-7 items-center justify-center rounded-full bg-gradient-to-br from-[#79AFFF] to-[#4A8FE7] text-[10px] font-bold text-[#050505]">
+                                {user.username?.charAt(0).toUpperCase() ?? "U"}
+                            </div>
+                            <span className="hidden text-xs font-medium text-[#F5F7FA] sm:block">
+                                @{user.username}
+                            </span>
+                        </Link>
+                    )}
 
                     {ready && authenticated && profileMissing ? (
                         <Link

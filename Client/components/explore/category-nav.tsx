@@ -24,17 +24,23 @@ const categories: Category[] = [
 type CategoryNavProps = {
     activeCategory?: string;
     onSelectCategory?: (id: string) => void;
+    className?: string;
+    showScrollButton?: boolean;
 };
 
 export function CategoryNav({
-    activeCategory = "all",
+    activeCategory,
     onSelectCategory,
+    className = "",
+    showScrollButton = false,
 }: CategoryNavProps) {
-    const [selected, setSelected] = useState(activeCategory);
+    const [internalSelected, setInternalSelected] = useState(activeCategory || "all");
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    const selected = activeCategory !== undefined ? activeCategory : internalSelected;
+
     const handleSelect = (id: string) => {
-        setSelected(id);
+        setInternalSelected(id);
         onSelectCategory?.(id);
     };
 
@@ -48,7 +54,7 @@ export function CategoryNav({
     };
 
     return (
-        <section className="relative w-full border-b border-[#24262B] bg-[#050505]">
+        <section className={`relative w-full border-[#24262B] bg-[#050505] ${className}`}>
             <div className="mx-auto flex max-w-[1400px] items-center justify-between px-5 sm:px-8">
                 <div
                     ref={scrollRef}
@@ -82,16 +88,18 @@ export function CategoryNav({
                     })}
                 </div>
 
-                <div className="hidden pl-4 md:flex">
-                    <button
-                        type="button"
-                        onClick={handleScrollRight}
-                        aria-label="Scroll right"
-                        className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#24262B] bg-[#151518] text-[#8B9099] transition-colors hover:border-[#79AFFF]/40 hover:bg-[#1f2127] hover:text-[#F5F7FA]"
-                    >
-                        <ChevronRight className="size-4" />
-                    </button>
-                </div>
+                {showScrollButton && (
+                    <div className="hidden pl-4 md:flex">
+                        <button
+                            type="button"
+                            onClick={handleScrollRight}
+                            aria-label="Scroll right"
+                            className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#24262B] bg-[#151518] text-[#8B9099] transition-colors hover:border-[#79AFFF]/40 hover:bg-[#1f2127] hover:text-[#F5F7FA]"
+                        >
+                            <ChevronRight className="size-4" />
+                        </button>
+                    </div>
+                )}
             </div>
         </section>
     );

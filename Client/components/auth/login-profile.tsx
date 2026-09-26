@@ -122,12 +122,12 @@ export default function LoginProfile() {
       return;
     }
 
-    prepareEmbeddedWallet().catch(() => {});
+    prepareEmbeddedWallet().catch(() => { });
   }, [authenticated, prepareEmbeddedWallet, ready, user]);
 
   useEffect(() => {
     if (currentUserQuery.data?.user) {
-      router.replace("/");
+      router.replace("/dashboard");
     }
   }, [currentUserQuery.data?.user, router]);
 
@@ -200,12 +200,12 @@ export default function LoginProfile() {
 
       await ensureWalletReady();
       await createUserWhenWalletIsReady(cleanUsername);
-      router.replace("/");
+      router.replace("/dashboard");
     } catch (saveError) {
       const message = getErrorMessage(saveError);
 
       if (message === "User already exists") {
-        router.replace("/");
+        router.replace("/dashboard");
         return;
       }
 
