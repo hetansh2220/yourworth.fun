@@ -1,3 +1,6 @@
+"use client";
+
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BadgeCheck } from "lucide-react";
@@ -10,20 +13,30 @@ export type CreatorCardProps = {
     price: string;
     change: number;
     description: string;
+    className?: string;
 };
 
 export function CreatorCard({
     name,
+    username,
     image,
     rating,
     price,
     change,
     description,
+    className = "",
 }: CreatorCardProps) {
+    const router = useRouter();
     const isPositive = change >= 0;
 
+    const cleanUsername = username.replace(/^@/, "");
+
     return (
-        <Card className="flex w-[300px] shrink-0 flex-col gap-0 overflow-hidden rounded-[28px] border-0 bg-card p-2">
+        <Card
+            className={`flex flex-col gap-0 overflow-hidden rounded-[28px] border-0 bg-card p-2 ${
+                className || "w-[300px] shrink-0"
+            }`}
+        >
             <div className="relative overflow-hidden rounded-[22px]">
                 <img
                     src={image}
@@ -42,6 +55,10 @@ export function CreatorCard({
 
                     <BadgeCheck className="size-4 shrink-0 text-primary" />
                 </div>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                    @{cleanUsername}
+                </p>
 
                 <p className="mt-1 line-clamp-2 h-10 text-sm leading-5 text-muted-foreground">
                     {description}
@@ -68,7 +85,10 @@ export function CreatorCard({
                     </p>
                 </div>
 
-                <Button className="mt-4 w-full">
+                <Button
+                    className="mt-4 w-full"
+                    onClick={() => router.push(`/creator/${cleanUsername}`)}
+                >
                     Buy time
                 </Button>
             </div>

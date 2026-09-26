@@ -246,10 +246,14 @@ export default function LoginProfile() {
       return;
     }
 
-    prepareEmbeddedWallet().catch(() => {});
+    prepareEmbeddedWallet().catch(() => { });
   }, [authenticated, prepareEmbeddedWallet, ready, user]);
 
   useEffect(() => {
+    if (currentUserQuery.data?.user) {
+      router.replace("/dashboard");
+    }
+  }, [currentUserQuery.data?.user, router]);
     return () => {
       if (avatarPreview.startsWith("blob:")) {
         URL.revokeObjectURL(avatarPreview);
@@ -372,13 +376,15 @@ export default function LoginProfile() {
       setError("");
 
       await ensureWalletReady();
+      await createUserWhenWalletIsReady(cleanUsername);
+      router.replace("/dashboard");
       await createUserWhenWalletIsReady(cleanUsername, avatarFile, cleanBio);
       router.replace("/");
     } catch (saveError) {
       const message = getErrorMessage(saveError);
 
       if (message === "User already exists") {
-        router.replace("/");
+        router.replace("/dashboard");
         return;
       }
 
