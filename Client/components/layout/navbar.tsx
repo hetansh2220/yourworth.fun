@@ -11,14 +11,12 @@ import { useCurrentUser } from "@/hooks/users/use-current-user";
 
 export function Navbar() {
     const router = useRouter();
-    const { ready, authenticated } = usePrivy();
+    const { ready, authenticated, login } = usePrivy();
     const { logout } = useLogout();
     const currentUserQuery = useCurrentUser();
     const currentUserError = currentUserQuery.error;
     const profileMissing =
         currentUserError instanceof ApiError && currentUserError.status === 404;
-    const user = currentUserQuery.data?.user;
-
     return (
         <nav className="border-b border-[#24262B] bg-[#050505]">
             <div className="mx-auto flex h-[72px] max-w-[1400px] items-center justify-between px-5 sm:px-8">
@@ -34,23 +32,9 @@ export function Navbar() {
                 </Link>
 
                 <div className="flex items-center gap-3">
-                    {ready && authenticated && user && (
-                        <Link
-                            href="/dashboard"
-                            className="flex items-center gap-2.5 rounded-xl border border-[#24262B] bg-[#0D0D0F] px-3.5 py-2 transition-all hover:border-[#79AFFF]/40 hover:bg-[#151518]"
-                        >
-                            <div className="flex size-7 items-center justify-center rounded-full bg-gradient-to-br from-[#79AFFF] to-[#4A8FE7] text-[10px] font-bold text-[#050505]">
-                                {user.username?.charAt(0).toUpperCase() ?? "U"}
-                            </div>
-                            <span className="hidden text-xs font-medium text-[#F5F7FA] sm:block">
-                                @{user.username}
-                            </span>
-                        </Link>
-                    )}
-
                     {ready && authenticated && profileMissing ? (
                         <Link
-                            href="/login?step=profile"
+                            href="/complete-profile"
                             className={buttonVariants({
                                 variant: "outline",
                                 className:
@@ -63,17 +47,18 @@ export function Navbar() {
 
                     <Button
                         className="px-8 py-1.5 text-base"
-                        onClick={() => {
+                        onClick={async () => {
                             if (!ready) {
                                 return;
                             }
 
                             if (authenticated) {
-                                logout();
+                                await logout();
+                                router.replace("/");
                                 return;
                             }
 
-                            router.push("/login");
+                            login();
                         }}
                     >
                         {ready && authenticated ? "Logout" : "Login"}

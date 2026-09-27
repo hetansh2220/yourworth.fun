@@ -10,6 +10,7 @@ import { ApiError } from "@/api";
 import { Button } from "@/components/ui/button";
 import { HeroCreatorTile } from "@/components/explore/hero-creator-tile";
 import { Navbar } from "@/components/layout/navbar";
+import { PageSpinner } from "@/components/layout/page-spinner";
 import { CategoryNav } from "@/components/explore/category-nav";
 import { CreatorCard } from "@/components/explore/creator-card";
 import { creatorImages, creators as topCreators } from "@/data/creators";
@@ -32,31 +33,45 @@ const heroTiles = [
 
 export default function ExplorePage() {
     const router = useRouter();
-    const { ready, authenticated } = usePrivy();
+    const { ready, authenticated, login } = usePrivy();
     const currentUserQuery = useCurrentUser();
-    const isLoggedIn = ready && authenticated;
-    const user = currentUserQuery.data?.user;
     const profileMissing =
         currentUserQuery.error instanceof ApiError &&
         currentUserQuery.error.status === 404;
+
+    const isCheckingAuthenticatedProfile =
+        ready &&
+        authenticated &&
+        (currentUserQuery.isLoading ||
+            currentUserQuery.isFetching ||
+            Boolean(currentUserQuery.data?.user) ||
+            profileMissing);
+
+    if (isCheckingAuthenticatedProfile) {
+        return (
+            <PageSpinner
+                label={profileMissing ? "Opening profile" : "Loading dashboard"}
+            />
+        );
+    }
 
     const handleExploreClick = () => {
         if (ready && authenticated) {
             router.push("/explore");
         } else {
-            router.push("/login");
+            login();
         }
     };
 
     const handleGetPaidClick = () => {
         if (ready && authenticated) {
             if (profileMissing) {
-                router.push("/login?step=profile");
+                router.push("/complete-profile");
             } else {
                 router.push("/dashboard");
             }
         } else {
-            router.push("/login");
+            login();
         }
     };
 
@@ -77,46 +92,6 @@ export default function ExplorePage() {
                 />
 
                 <div className="relative z-20 mx-auto flex min-h-[calc(100svh-72px)] max-w-[1400px] flex-col items-center px-5 pb-[250px] pt-16 text-center sm:px-8 sm:pb-[290px] sm:pt-20 md:pb-[315px] lg:pb-[345px] lg:pt-[88px] xl:pb-[360px]">
-                    {isLoggedIn && user && (
-                        <Link
-                            href="/dashboard"
-                            className="group mb-6 flex items-center gap-3 rounded-full border border-[#24262B] bg-[#0D0D0F]/80 px-5 py-2.5 backdrop-blur-md transition-all hover:border-[#79AFFF]/40 hover:bg-[#151518]"
-                        >
-                            <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-[#79AFFF] to-[#4A8FE7] text-xs font-bold text-[#050505]">
-                                {user.username?.charAt(0).toUpperCase() ?? "U"}
-                            </div>
-                            <div className="text-left">
-                                <p className="text-xs font-semibold text-[#F5F7FA]">
-                                    Welcome back, @{user.username}
-                                </p>
-                                <p className="text-[10px] text-[#8B9099]">
-                                    Go to your dashboard
-                                </p>
-                            </div>
-                            <ChevronRight className="ml-1 size-4 text-[#8B9099] transition-transform group-hover:translate-x-0.5 group-hover:text-[#79AFFF]" />
-                        </Link>
-                    )}
-
-                    {isLoggedIn && profileMissing && (
-                        <Link
-                            href="/login?step=profile"
-                            className="group mb-6 flex items-center gap-3 rounded-full border border-[#79AFFF]/30 bg-[#0D0D0F]/80 px-5 py-2.5 backdrop-blur-md transition-all hover:border-[#79AFFF]/60 hover:bg-[#151518]"
-                        >
-                            <div className="flex size-8 items-center justify-center rounded-full bg-[#79AFFF]/20 text-xs font-bold text-[#79AFFF]">
-                                +
-                            </div>
-                            <div className="text-left">
-                                <p className="text-xs font-semibold text-[#F5F7FA]">
-                                    Complete your profile
-                                </p>
-                                <p className="text-[10px] text-[#8B9099]">
-                                    Choose your username to start
-                                </p>
-                            </div>
-                            <ChevronRight className="ml-1 size-4 text-[#8B9099] transition-transform group-hover:translate-x-0.5 group-hover:text-[#79AFFF]" />
-                        </Link>
-                    )}
-
                     <h1 className="max-w-3xl text-5xl font-semibold leading-[0.96] tracking-normal text-[#F5F7FA] sm:text-6xl md:text-7xl lg:text-8xl">
                         What&apos;s your
                         <br />

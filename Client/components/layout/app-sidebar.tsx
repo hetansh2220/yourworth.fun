@@ -25,7 +25,7 @@ export function AppSidebar({
 }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { ready, authenticated } = usePrivy();
+    const { ready, authenticated, login } = usePrivy();
     const { logout } = useLogout();
 
     const isDashboard = pathname === "/dashboard";
@@ -114,11 +114,12 @@ export function AppSidebar({
 
                 <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                         if (ready && authenticated) {
-                            logout();
+                            await logout();
+                            router.replace("/");
                         } else {
-                            router.push("/login");
+                            login();
                         }
                     }}
                     className="flex size-10 items-center justify-center rounded-xl text-[#8B9099] transition-colors hover:bg-[#151518] hover:text-[#F5F7FA]"
@@ -139,7 +140,7 @@ export function MobileNavDrawer({
 }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { ready, authenticated } = usePrivy();
+    const { ready, authenticated, login } = usePrivy();
     const { logout } = useLogout();
 
     if (!isOpen) return null;
@@ -249,12 +250,13 @@ export function MobileNavDrawer({
                 <div className="border-t border-[#24262B] pt-4">
                     <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                             onClose();
                             if (ready && authenticated) {
-                                logout();
+                                await logout();
+                                router.replace("/");
                             } else {
-                                router.push("/login");
+                                login();
                             }
                         }}
                         className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-[#8B9099] transition-colors hover:bg-[#151518] hover:text-[#F5F7FA]"

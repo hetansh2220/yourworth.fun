@@ -37,7 +37,7 @@ export default function CreatorProfilePage({
 }) {
     const resolvedParams = use(params);
     const router = useRouter();
-    const { ready, authenticated } = usePrivy();
+    const { ready, authenticated, login } = usePrivy();
 
     const creator = getCreatorByUsername(resolvedParams.username);
 
@@ -99,7 +99,7 @@ export default function CreatorProfilePage({
     const handleRequireAuth = (actionCallback?: () => void) => {
         if (!ready) return;
         if (!authenticated) {
-            router.push("/login");
+            login();
             return;
         }
         actionCallback?.();
@@ -897,7 +897,7 @@ export default function CreatorProfilePage({
                                             variant="outline"
                                             size="sm"
                                             onClick={() =>
-                                                router.push("/login")
+                                                login()
                                             }
                                             className="mt-3 border-[#24262B] bg-[#151518] text-xs text-[#F5F7FA] hover:border-[#79AFFF]/40 hover:bg-[#1a1a20]"
                                         >

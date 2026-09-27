@@ -16,7 +16,7 @@ export function AppHeader({
     subtitle?: string;
     onMenuClick?: () => void;
 }) {
-    const { ready, authenticated } = usePrivy();
+    const { ready, authenticated, login } = usePrivy();
     const currentUserQuery = useCurrentUser();
     const profileMissing =
         currentUserQuery.error instanceof ApiError &&
@@ -53,9 +53,9 @@ export function AppHeader({
                     href={
                         ready && authenticated
                             ? profileMissing
-                                ? "/login?step=profile"
+                                ? "/complete-profile"
                                 : "/dashboard"
-                            : "/login"
+                            : "/"
                     }
                     className="flex size-9 items-center justify-center rounded-xl border border-[#24262B] bg-[#0D0D0F] text-[#8B9099] hover:text-[#F5F7FA]"
                 >
@@ -63,14 +63,13 @@ export function AppHeader({
                 </Link>
 
                 {ready && !authenticated ? (
-                    <Link href="/login">
-                        <Button
-                            size="sm"
-                            className="h-9 px-4 text-xs font-semibold"
-                        >
-                            Login
-                        </Button>
-                    </Link>
+                    <Button
+                        size="sm"
+                        className="h-9 px-4 text-xs font-semibold"
+                        onClick={() => login()}
+                    >
+                        Login
+                    </Button>
                 ) : null}
             </div>
         </header>

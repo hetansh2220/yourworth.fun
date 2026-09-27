@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -14,6 +14,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useCurrentUser } from "@/hooks/users/use-current-user";
 import { AppSidebar, MobileNavDrawer } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
+import { PageSpinner } from "@/components/layout/page-spinner";
 import { WorthChart } from "@/components/charts/worth-chart";
 import { getMockHistoricalData, type ChartTimeframe } from "@/data/chart-data";
 import { getCreatorByUsername } from "@/data/creators";
@@ -69,40 +70,47 @@ export default function DashboardPage() {
     const { ready, authenticated } = usePrivy();
     const currentUserQuery = useCurrentUser();
     const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+    const [timeframe, setTimeframe] = useState<ChartTimeframe>("1D");
 
-    if (ready && !authenticated) {
-        router.replace("/login");
-        return null;
-    }
+    useEffect(() => {
+        if (ready && !authenticated) {
+            router.replace("/");
+        }
+    }, [authenticated, ready, router]);
 
     const username = currentUserQuery.data?.user?.username;
-    const [timeframe, setTimeframe] = useState<ChartTimeframe>("1D");
 
     const userCreator = username ? getCreatorByUsername(username) : null;
     const numericUserPrice = userCreator
         ? parseFloat(userCreator.price.replace(/[^0-9.]/g, "")) || 0
         : 0;
 
-    const userChartIdentifier = username ? `user_${username}` : "me_worth_history";
+    const userChartIdentifier = username
+        ? `user_${username}`
+        : "me_worth_history";
     const chartData = useMemo(() => {
         return getMockHistoricalData(
             userChartIdentifier,
             timeframe,
             numericUserPrice,
-            userCreator?.change ?? 0
+            userCreator?.change ?? 0,
         );
     }, [userChartIdentifier, timeframe, numericUserPrice, userCreator]);
 
     const chartTitle = userCreator
         ? `${userCreator.name}'s WORTH`
         : username
-        ? `@${username}'s WORTH`
-        : "My WORTH";
+          ? `@${username}'s WORTH`
+          : "My WORTH";
 
     const displayPrice = userCreator ? userCreator.price : "$0.00";
     const displayChange = userCreator
         ? `${userCreator.change >= 0 ? "+" : ""}${userCreator.change.toFixed(2)}%`
         : "0.00%";
+
+    if (ready && !authenticated) {
+        return <PageSpinner label="Redirecting" />;
+    }
 
     return (
         <main className="min-h-screen bg-[#050505] text-[#F5F7FA]">
@@ -156,11 +164,20 @@ export default function DashboardPage() {
                                             </p>
                                         </div>
                                         <div className="flex items-center rounded-xl border border-[#24262B] bg-[#151518] p-1">
-                                            {(["1D", "1W", "1M", "1Y"] as ChartTimeframe[]).map((period) => (
+                                            {(
+                                                [
+                                                    "1D",
+                                                    "1W",
+                                                    "1M",
+                                                    "1Y",
+                                                ] as ChartTimeframe[]
+                                            ).map((period) => (
                                                 <button
                                                     key={period}
                                                     type="button"
-                                                    onClick={() => setTimeframe(period)}
+                                                    onClick={() =>
+                                                        setTimeframe(period)
+                                                    }
                                                     className={`rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors ${
                                                         timeframe === period
                                                             ? "bg-[#24262B] text-[#F5F7FA]"
@@ -177,7 +194,11 @@ export default function DashboardPage() {
                                         data={chartData}
                                         compact={true}
                                         showVolume={false}
-                                        referencePrice={numericUserPrice > 0 ? numericUserPrice : undefined}
+                                        referencePrice={
+                                            numericUserPrice > 0
+                                                ? numericUserPrice
+                                                : undefined
+                                        }
                                         timeframe={timeframe}
                                     />
                                 </div>
@@ -245,7 +266,8 @@ export default function DashboardPage() {
                                                 Trending creators
                                             </h2>
                                             <p className="mt-1 text-xs text-[#8B9099]">
-                                                People getting attention right now
+                                                People getting attention right
+                                                now
                                             </p>
                                         </div>
 
@@ -302,7 +324,7 @@ export default function DashboardPage() {
 
                             <aside className="space-y-5">
                                 <Link
-                                    href="/login?step=profile"
+                                    href="/complete-profile"
                                     className="group block overflow-hidden rounded-2xl border border-[#79AFFF]/30 bg-[#0D0D0F] p-4 transition-colors hover:border-[#79AFFF]/60"
                                 >
                                     <div className="flex items-center justify-between">
@@ -379,8 +401,8 @@ export default function DashboardPage() {
                                         </p>
 
                                         <p className="mt-2 max-w-[220px] text-xs leading-5 text-[#8B9099]">
-                                            Discover people and get access to the
-                                            time worth buying.
+                                            Discover people and get access to
+                                            the time worth buying.
                                         </p>
 
                                         <Link
@@ -410,8 +432,8 @@ export default function DashboardPage() {
                                         </p>
 
                                         <p className="mt-2 max-w-[220px] text-xs leading-5 text-[#8B9099]">
-                                            Save creators you want to keep an eye
-                                            on.
+                                            Save creators you want to keep an
+                                            eye on.
                                         </p>
                                     </div>
                                 </section>

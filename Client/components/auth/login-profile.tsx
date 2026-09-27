@@ -10,7 +10,7 @@ import { ApiError } from "@/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageSpinner } from "@/components/layout/page-spinner";
 import { useCreateUser } from "@/hooks/users/use-create-user";
 import { useCurrentUser } from "@/hooks/users/use-current-user";
 import { useUsernameAvailability } from "@/hooks/users/use-username-availability";
@@ -25,44 +25,12 @@ function getSolanaEmbeddedWallet(user: User | null): WalletAccount | undefined {
     (account): account is WalletAccount =>
       account.type === "wallet" &&
       account.chainType === "solana" &&
-      account.walletClientType === "privy"
+      account.walletClientType === "privy",
   );
 }
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Could not create user.";
-}
-
-function LoginProfileSkeleton() {
-  return (
-    <div className="mx-auto grid w-full max-w-sm gap-7">
-      <div className="grid justify-items-center gap-3">
-        <Skeleton className="h-12 w-64 bg-white/10" />
-        <Skeleton className="h-4 w-48 bg-white/10" />
-      </div>
-
-      <div className="grid justify-items-center gap-3">
-        <Skeleton className="size-28 rounded-full bg-white/10" />
-        <Skeleton className="h-4 w-36 bg-white/10" />
-      </div>
-
-      <div className="grid gap-5">
-        <div className="grid gap-2">
-          <Skeleton className="h-4 w-32 bg-white/10" />
-          <Skeleton className="h-14 w-full rounded-2xl bg-white/10" />
-          <Skeleton className="h-4 w-56 bg-white/10" />
-        </div>
-
-        <div className="grid gap-2">
-          <Skeleton className="h-4 w-12 bg-white/10" />
-          <Skeleton className="h-14 w-full rounded-2xl bg-white/10" />
-          <Skeleton className="h-4 w-24 bg-white/10" />
-        </div>
-
-        <Skeleton className="h-14 w-full rounded-2xl bg-white/10" />
-      </div>
-    </div>
-  );
 }
 
 function isWalletNotReadyError(message: string) {
@@ -97,7 +65,11 @@ function loadImage(file: File) {
   });
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality: number,
+) {
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob(resolve, type, quality);
   });
@@ -123,7 +95,7 @@ async function compressAvatarFile(file: File) {
   const scale = Math.min(
     AVATAR_MAX_DIMENSION / image.naturalWidth,
     AVATAR_MAX_DIMENSION / image.naturalHeight,
-    1
+    1,
   );
   const width = Math.max(1, Math.round(image.naturalWidth * scale));
   const height = Math.max(1, Math.round(image.naturalHeight * scale));
@@ -184,13 +156,14 @@ export default function LoginProfile() {
   const isValidUsername = /^[a-zA-Z0-9_]{3,20}$/.test(cleanUsername);
   const usernameAvailabilityQuery = useUsernameAvailability(
     debouncedUsername,
-    isValidUsername && debouncedUsername === cleanUsername
+    isValidUsername && debouncedUsername === cleanUsername,
   );
   const usernameAvailability = usernameAvailabilityQuery.data;
   const usernameCheckPending =
     hasUsername &&
     isValidUsername &&
-    (debouncedUsername !== cleanUsername || usernameAvailabilityQuery.isFetching);
+    (debouncedUsername !== cleanUsername ||
+      usernameAvailabilityQuery.isFetching);
   const usernameAvailable =
     hasUsername &&
     isValidUsername &&
@@ -246,14 +219,10 @@ export default function LoginProfile() {
       return;
     }
 
-    prepareEmbeddedWallet().catch(() => { });
+    prepareEmbeddedWallet().catch(() => {});
   }, [authenticated, prepareEmbeddedWallet, ready, user]);
 
   useEffect(() => {
-    if (currentUserQuery.data?.user) {
-      router.replace("/dashboard");
-    }
-  }, [currentUserQuery.data?.user, router]);
     return () => {
       if (avatarPreview.startsWith("blob:")) {
         URL.revokeObjectURL(avatarPreview);
@@ -288,7 +257,7 @@ export default function LoginProfile() {
   async function createUserWhenWalletIsReady(
     cleanUsername: string,
     avatar: File,
-    cleanBio: string
+    cleanBio: string,
   ) {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
@@ -376,10 +345,8 @@ export default function LoginProfile() {
       setError("");
 
       await ensureWalletReady();
-      await createUserWhenWalletIsReady(cleanUsername);
-      router.replace("/dashboard");
       await createUserWhenWalletIsReady(cleanUsername, avatarFile, cleanBio);
-      router.replace("/");
+      router.replace("/dashboard");
     } catch (saveError) {
       const message = getErrorMessage(saveError);
 
@@ -400,11 +367,15 @@ export default function LoginProfile() {
     (currentUserQuery.isFetching && !profileMissing);
 
   if (checkingProfile || currentUserQuery.data?.user) {
-    return <LoginProfileSkeleton />;
+    return <PageSpinner label="Checking profile" />;
   }
 
   if (profileLoadFailed) {
-    return <p className="text-sm text-destructive">Could not load profile.</p>;
+    return (
+      <p className="text-sm text-destructive">
+        Could not load complete profile.
+      </p>
+    );
   }
 
   return (
@@ -496,7 +467,9 @@ export default function LoginProfile() {
           ) : usernameTaken ? (
             <p className="text-sm text-destructive">Username is taken.</p>
           ) : usernameCheckFailed ? (
-            <p className="text-sm text-destructive">Could not check username.</p>
+            <p className="text-sm text-destructive">
+              Could not check username.
+            </p>
           ) : null}
         </div>
 
