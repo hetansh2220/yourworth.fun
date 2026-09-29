@@ -25,7 +25,7 @@ export const users = pgTable("users", {
 
   bio: text("bio").notNull().default(""),
 
-  token: text("token").notNull().default(""),
+  token: text("token").default(""),
 
   createdAt: timestamp("created_at", {
     withTimezone: true,
