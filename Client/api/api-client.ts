@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 export type ApiSuccess<T> = {
   success: true;
@@ -22,6 +22,12 @@ type ApiFetchOptions = Omit<RequestInit, "body"> & {
 
 function createUrl(path: string) {
   return `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+export function createWebSocketUrl(path: string) {
+  const url = new URL(createUrl(path));
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.toString();
 }
 
 export async function apiFetch<T>(

@@ -23,11 +23,10 @@ export const chats = pgTable("chats", {
   type: chatTypeEnum("type")
     .notNull(),
 
-  image: text("image"),
-
   admin: uuid("admin")
     .notNull()
     .references(() => users.id, {
+      onDelete: "cascade",
     }),
 
   createdAt: timestamp("created_at", {
@@ -44,7 +43,8 @@ export const chats = pgTable("chats", {
 });
 
 
-export const chatMembers = pgTable("chat_members",
+export const chatMembers = pgTable(
+  "chat_members",
   {
     id: uuid("id")
       .defaultRandom()
@@ -52,11 +52,14 @@ export const chatMembers = pgTable("chat_members",
 
     chatId: uuid("chat_id")
       .notNull()
-      .references(() => chats.id, {}),
+      .references(() => chats.id, {
+        onDelete: "cascade",
+      }),
 
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, {
+        onDelete: "cascade",
       }),
 
     joinedAt: timestamp("joined_at", {
@@ -74,11 +77,15 @@ export const chatMembers = pgTable("chat_members",
       table.chatId,
       table.userId
     ),
+    index("chat_members_user_id_idx").on(
+      table.userId
+    ),
   ]
 );
 
 
-export const messages = pgTable("messages",
+export const messages = pgTable(
+  "messages",
   {
     id: uuid("id")
       .defaultRandom()
@@ -87,11 +94,13 @@ export const messages = pgTable("messages",
     chatId: uuid("chat_id")
       .notNull()
       .references(() => chats.id, {
+        onDelete: "cascade",
       }),
 
     senderId: uuid("sender_id")
       .notNull()
       .references(() => users.id, {
+        onDelete: "cascade",
       }),
 
     content: text("content")
@@ -102,6 +111,20 @@ export const messages = pgTable("messages",
     })
       .defaultNow()
       .notNull(),
+
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+
+    editedAt: timestamp("edited_at", {
+      withTimezone: true,
+    }),
+
+    deletedAt: timestamp("deleted_at", {
+      withTimezone: true,
+    }),
   },
   (table) => [
     index("messages_chat_created_at_idx").on(

@@ -1,8 +1,7 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import {
     BadgeCheck,
@@ -36,7 +35,6 @@ export default function CreatorProfilePage({
     params: Promise<{ username: string }>;
 }) {
     const resolvedParams = use(params);
-    const router = useRouter();
     const { ready, authenticated, login } = usePrivy();
 
     const creator = getCreatorByUsername(resolvedParams.username);
@@ -86,15 +84,12 @@ export default function CreatorProfilePage({
         : selectedMinutes;
     const totalCost = (numericPrice * activeMinutes).toFixed(2);
 
-    const creatorChartData = useMemo(() => {
-        if (!creator) return [];
-        return getMockHistoricalData(
-            `creator_${creator.username}`,
-            creatorTimeframe,
-            numericPrice,
-            creator.change
-        );
-    }, [creator, creatorTimeframe, numericPrice]);
+    const creatorChartData = getMockHistoricalData(
+        `creator_${creator.username}`,
+        creatorTimeframe,
+        numericPrice,
+        creator.change
+    );
 
     const handleRequireAuth = (actionCallback?: () => void) => {
         if (!ready) return;

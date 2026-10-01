@@ -3,6 +3,9 @@ import { Hono } from "hono";
 import { getUserByUsername } from "./controllers/users.controller";
 import { usersRoute } from "./routes/users";
 import { marketsRoute } from "./routes/markets";
+import { chatsRoute } from "./routes/chats";
+import { chatWebSocket, upgradeChatWebSocket } from "./lib/chat/realtime";
+import { setChatServer } from "./lib/chat/pubsub";
 import type { AppEnv } from "./types/app";
 import { cors } from "hono/cors";
 
@@ -26,9 +29,26 @@ app.get("/", (c) => {
 
 app.route("/users", usersRoute);
 app.route("/markets", marketsRoute);
+app.route("/chats", chatsRoute);
 app.get("/:username", getUserByUsername);
 
 export default {
   port: 8080,
-  fetch: app.fetch,
+  async fetch(req: Request, server: Bun.Server<import("./lib/chat/realtime").ChatSocketData>) {
+    setChatServer(server);
+    const url = new URL(req.url);
+
+    if (url.pathname.match(/^\/chats\/[^/]+\/ws$/)) {
+      const response = await upgradeChatWebSocket(req, server);
+
+      if (response) {
+        return response;
+      }
+
+      return undefined;
+    }
+
+    return app.fetch(req);
+  },
+  websocket: chatWebSocket,
 };
