@@ -4,6 +4,7 @@ import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
 import { AppPrivyProvider } from "@/providers/privy-provider";
 import { ProfileRedirectGuard } from "@/components/auth/profile-redirect-guard";
+import { PrivyTokenDebugger } from "@/components/auth/privy-token-debugger";
 
 export const metadata: Metadata = {
   title: "Worth",
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <QueryProvider>
             <Suspense fallback={null}>
               <ProfileRedirectGuard />
+              <PrivyTokenDebugger />
             </Suspense>
             {children}
           </QueryProvider>

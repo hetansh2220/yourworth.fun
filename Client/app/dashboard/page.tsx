@@ -67,11 +67,11 @@ const recentActivity = [
 
 export default function DashboardPage() {
     const router = useRouter();
-    const { ready, authenticated } = usePrivy();
+    const { ready, authenticated, user } = usePrivy();
     const currentUserQuery = useCurrentUser();
     const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
     const [timeframe, setTimeframe] = useState<ChartTimeframe>("1D");
-
+    console.log(user);
     useEffect(() => {
         if (ready && !authenticated) {
             router.replace("/");
