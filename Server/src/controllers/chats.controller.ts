@@ -3,7 +3,8 @@ import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
-import { chatMembers, chats, messages, users } from "../db/schema";
+import { chatMembers, chats, markets, messages, users } from "../db/schema";
+import { walletHoldsToken } from "../lib/solana/token-holdings";
 import { publishChatEvent } from "../lib/chat/pubsub";
 import type { AppEnv } from "../types/app";
 
@@ -18,6 +19,7 @@ const chatFields = {
   id: chats.id,
   type: chats.type,
   admin: chats.admin,
+  creatorId: chats.creatorId,
   createdAt: chats.createdAt,
   updatedAt: chats.updatedAt,
 };
@@ -49,6 +51,15 @@ const createGroupSchema = z.object({
 const addGroupMemberSchema = z.object({
   userId: z.string().uuid(),
 });
+
+const joinPrivateGroupSchema = z
+  .object({
+    creatorId: z.string().uuid().optional(),
+    username: z.string().trim().min(1).optional(),
+  })
+  .refine((data) => data.creatorId || data.username, {
+    message: "Creator id or username is required",
+  });
 
 function getErrorCode(error: unknown) {
   return typeof error === "object" &&
@@ -164,6 +175,80 @@ async function getChatWithMembers(chatId: string) {
     ...chat,
     members: membersByChatId.get(chat.id) ?? [],
   };
+}
+
+async function getGroupMarketByCreatorId(creatorId: string) {
+  const [market] = await db
+    .select({
+      id: markets.id,
+      paymentType: markets.paymentType,
+    })
+    .from(markets)
+    .where(and(eq(markets.userId, creatorId), eq(markets.marketType, "group")))
+    .limit(1);
+
+  return market;
+}
+
+async function getPrivateGroupChatId(creatorId: string) {
+  const [chat] = await db
+    .select({
+      id: chats.id,
+    })
+    .from(chats)
+    .where(
+      and(
+        eq(chats.type, "GROUP"),
+        eq(chats.creatorId, creatorId)
+      )
+    )
+    .limit(1);
+
+  return chat?.id ?? null;
+}
+
+async function createPrivateGroupChat(creatorId: string) {
+  const [newChat] = await db
+    .insert(chats)
+    .values({
+      type: "GROUP",
+      admin: creatorId,
+      creatorId,
+    })
+    .onConflictDoNothing({
+      target: [chats.creatorId, chats.type],
+    })
+    .returning({ id: chats.id });
+
+  if (!newChat) {
+    const existingChatId = await getPrivateGroupChatId(creatorId);
+
+    if (!existingChatId) {
+      throw new Error("Failed to create private group chat");
+    }
+
+    return existingChatId;
+  }
+
+  await db
+    .insert(chatMembers)
+    .values({
+      chatId: newChat.id,
+      userId: creatorId,
+    })
+    .onConflictDoNothing();
+
+  return newChat.id;
+}
+
+async function getOrCreatePrivateGroupChatId(creatorId: string) {
+  const existingChatId = await getPrivateGroupChatId(creatorId);
+
+  if (existingChatId) {
+    return existingChatId;
+  }
+
+  return createPrivateGroupChat(creatorId);
 }
 
 async function getExistingDmChatId(currentUserId: string, targetUserId: string) {
@@ -396,6 +481,192 @@ export async function createGroupChat(c: Context<AppEnv>) {
   }
 }
 
+export async function getOrCreateMyPrivateGroup(c: Context<AppEnv>) {
+  try {
+    const currentUser = await getCurrentUser(c.get("privyUserId"));
+
+    if (!currentUser) {
+      return c.json(
+        {
+          success: false,
+          message: "Create your user profile first",
+        },
+        404
+      );
+    }
+
+    const groupMarket = await getGroupMarketByCreatorId(currentUser.id);
+
+    if (!groupMarket) {
+      return c.json(
+        {
+          success: false,
+          message: "Create your group market first",
+        },
+        404
+      );
+    }
+
+    if (groupMarket.paymentType !== "token") {
+      return c.json(
+        {
+          success: false,
+          message: "Private groups require creator token access",
+        },
+        400
+      );
+    }
+
+    if (!currentUser.token) {
+      return c.json(
+        {
+          success: false,
+          message: "Launch your creator token first",
+        },
+        400
+      );
+    }
+
+    const chatId = await getOrCreatePrivateGroupChatId(currentUser.id);
+    const chat = await getChatWithMembers(chatId);
+
+    return c.json(
+      {
+        success: true,
+        message: "Private group ready",
+        chat,
+      },
+      200
+    );
+  } catch (error) {
+    console.error("Get or create private group error:", error);
+    return c.json(
+      {
+        success: false,
+        message: "Failed to prepare private group",
+      },
+      500
+    );
+  }
+}
+
+export async function joinPrivateGroup(c: Context<AppEnv>) {
+  const body = await c.req.json().catch(() => null);
+  const parsedBody = joinPrivateGroupSchema.safeParse(body);
+
+  if (!parsedBody.success) {
+    return c.json(
+      {
+        success: false,
+        message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
+      },
+      400
+    );
+  }
+
+  try {
+    const currentUser = await getCurrentUser(c.get("privyUserId"));
+
+    if (!currentUser) {
+      return c.json(
+        {
+          success: false,
+          message: "Create your user profile first",
+        },
+        404
+      );
+    }
+
+    const creator = parsedBody.data.creatorId
+      ? await getUserById(parsedBody.data.creatorId)
+      : await getUserByUsername(parsedBody.data.username ?? "");
+
+    if (!creator) {
+      return c.json(
+        {
+          success: false,
+          message: "Creator not found",
+        },
+        404
+      );
+    }
+
+    const groupMarket = await getGroupMarketByCreatorId(creator.id);
+
+    if (!groupMarket || groupMarket.paymentType !== "token") {
+      return c.json(
+        {
+          success: false,
+          message: "Creator private group is not available",
+        },
+        404
+      );
+    }
+
+    if (!creator.token) {
+      return c.json(
+        {
+          success: false,
+          message: "Creator token is not launched",
+        },
+        400
+      );
+    }
+
+    const hasAccess =
+      currentUser.id === creator.id ||
+      await walletHoldsToken({
+        walletAddress: currentUser.walletAddress,
+        mintAddress: creator.token,
+      });
+
+    if (!hasAccess) {
+      return c.json(
+        {
+          success: false,
+          message: "Creator token required to join this group",
+        },
+        403
+      );
+    }
+
+    const chatId = await getOrCreatePrivateGroupChatId(creator.id);
+
+    await db
+      .insert(chatMembers)
+      .values({
+        chatId,
+        userId: currentUser.id,
+      })
+      .onConflictDoNothing();
+
+    await db
+      .update(chats)
+      .set({ updatedAt: new Date() })
+      .where(eq(chats.id, chatId));
+
+    const chat = await getChatWithMembers(chatId);
+
+    return c.json(
+      {
+        success: true,
+        message: "Private group joined",
+        chat,
+      },
+      200
+    );
+  } catch (error) {
+    console.error("Join private group error:", error);
+    return c.json(
+      {
+        success: false,
+        message: "Failed to join private group",
+      },
+      500
+    );
+  }
+}
+
 export async function getMyChats(c: Context<AppEnv>) {
   try {
     const currentUser = await getCurrentUser(c.get("privyUserId"));
@@ -517,6 +788,39 @@ export async function addGroupMember(c: Context<AppEnv>) {
       );
     }
 
+    const chat = await getChatWithMembers(c.get("chatId"));
+
+    if (chat?.creatorId) {
+      const creator = await getUserById(chat.creatorId);
+
+      if (!creator?.token) {
+        return c.json(
+          {
+            success: false,
+            message: "Creator token is not launched",
+          },
+          400
+        );
+      }
+
+      const hasAccess =
+        member.id === chat.creatorId ||
+        await walletHoldsToken({
+          walletAddress: member.walletAddress,
+          mintAddress: creator.token,
+        });
+
+      if (!hasAccess) {
+        return c.json(
+          {
+            success: false,
+            message: "Creator token required to join this group",
+          },
+          403
+        );
+      }
+    }
+
     await db.insert(chatMembers).values({
       chatId: c.get("chatId"),
       userId: member.id,
@@ -527,13 +831,13 @@ export async function addGroupMember(c: Context<AppEnv>) {
       .set({ updatedAt: new Date() })
       .where(eq(chats.id, c.get("chatId")));
 
-    const chat = await getChatWithMembers(c.get("chatId"));
+    const updatedChat = await getChatWithMembers(c.get("chatId"));
 
     return c.json(
       {
         success: true,
         message: "Group member added successfully",
-        chat,
+        chat: updatedChat,
       },
       201
     );

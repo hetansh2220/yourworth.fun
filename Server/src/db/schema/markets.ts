@@ -55,8 +55,15 @@ export const markets = pgTable(
 export const marketTypeSchema = z.enum(["dm", "group"]);
 export const paymentTypeSchema = z.enum(["usdc", "token"]);
 
-export const marketSchema = z.object({
-  marketType: marketTypeSchema,
-  paymentType: paymentTypeSchema,
-});
-
+export const marketSchema = z
+  .object({
+    marketType: marketTypeSchema,
+    paymentType: paymentTypeSchema,
+  })
+  .refine(
+    (data) => data.marketType !== "group" || data.paymentType === "token",
+    {
+      message: "Private group markets require creator token payment",
+      path: ["paymentType"],
+    }
+  );

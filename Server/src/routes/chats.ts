@@ -6,6 +6,8 @@ import {
   createGroupChat,
   getChatById,
   getMyChats,
+  getOrCreateMyPrivateGroup,
+  joinPrivateGroup,
   markChatRead,
   removeGroupMember,
 } from "../controllers/chats.controller";
@@ -21,6 +23,8 @@ export const chatsRoute = new Hono<AppEnv>();
 
 chatsRoute.post("/dm", authMiddleware, createDmChat);
 chatsRoute.post("/group", authMiddleware, createGroupChat);
+chatsRoute.get("/private-group/me", authMiddleware, getOrCreateMyPrivateGroup);
+chatsRoute.post("/private-group/join", authMiddleware, joinPrivateGroup);
 chatsRoute.get("/", authMiddleware, getMyChats);
 chatsRoute.patch("/:chatId/read", authMiddleware, chatMemberMiddleware, markChatRead);
 chatsRoute.get("/:chatId", authMiddleware, chatMemberMiddleware, getChatById);

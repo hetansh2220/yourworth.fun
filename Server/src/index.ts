@@ -5,6 +5,7 @@ import { usersRoute } from "./routes/users";
 import { marketsRoute } from "./routes/markets";
 import { chatsRoute } from "./routes/chats";
 import { creatorTokensRoute } from "./routes/creator-tokens";
+import { dmRequestsRoute } from "./routes/dm-requests";
 import { chatWebSocket, upgradeChatWebSocket } from "./lib/chat/realtime";
 import { setChatServer } from "./lib/chat/pubsub";
 import type { AppEnv } from "./types/app";
@@ -32,6 +33,7 @@ app.route("/users", usersRoute);
 app.route("/markets", marketsRoute);
 app.route("/chats", chatsRoute);
 app.route("/creator-tokens", creatorTokensRoute);
+app.route("/dm-requests", dmRequestsRoute);
 app.get("/:username", getUserByUsername);
 
 export default {

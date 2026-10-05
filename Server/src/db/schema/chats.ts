@@ -15,32 +15,49 @@ export const chatTypeEnum = pgEnum("chat_type", [
   "GROUP",
 ]);
 
-export const chats = pgTable("chats", {
-  id: uuid("id")
-    .defaultRandom()
-    .primaryKey(),
+export const chats = pgTable(
+  "chats",
+  {
+    id: uuid("id")
+      .defaultRandom()
+      .primaryKey(),
 
-  type: chatTypeEnum("type")
-    .notNull(),
+    type: chatTypeEnum("type")
+      .notNull(),
 
-  admin: uuid("admin")
-    .notNull()
-    .references(() => users.id, {
-      onDelete: "cascade",
-    }),
+    admin: uuid("admin")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "cascade",
+      }),
 
-  createdAt: timestamp("created_at", {
-    withTimezone: true,
-  })
-    .defaultNow()
-    .notNull(),
+    creatorId: uuid("creator_id")
+      .references(() => users.id, {
+        onDelete: "cascade",
+      }),
 
-  updatedAt: timestamp("updated_at", {
-    withTimezone: true,
-  })
-    .defaultNow()
-    .notNull(),
-});
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("chats_creator_group_unique").on(
+      table.creatorId,
+      table.type
+    ),
+    index("chats_creator_id_idx").on(
+      table.creatorId
+    ),
+  ]
+);
 
 
 export const chatMembers = pgTable(
