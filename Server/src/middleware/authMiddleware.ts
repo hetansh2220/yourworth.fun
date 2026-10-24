@@ -1,13 +1,16 @@
 import type { Context, Next } from "hono";
 import { privy } from "../lib/privy";
+import { eq } from "drizzle-orm";
+import { db } from "../db";
+import { users } from "../db/schema";
 import type { AppEnv } from "../types/app";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function getSolanaEmbeddedWalletAddress(linkedAccounts: unknown[]) {
-  const wallet = linkedAccounts.find(
+function getSolanaEmbeddedWalletAddress(linkedAccounts: unknown[], preferredAddress?: string) {
+  const wallets = linkedAccounts.filter(
     (account) =>
       isRecord(account) &&
       account.type === "wallet" &&
@@ -15,6 +18,9 @@ function getSolanaEmbeddedWalletAddress(linkedAccounts: unknown[]) {
       account.wallet_client_type === "privy" &&
       typeof account.address === "string"
   );
+  const wallet = wallets.find(
+    (account) => isRecord(account) && account.address === preferredAddress,
+  ) ?? wallets[0];
 
   return isRecord(wallet) && typeof wallet.address === "string"
     ? wallet.address
@@ -48,8 +54,14 @@ export async function walletRequiredMiddleware(c: Context<AppEnv>, next: Next) {
   try {
     const privyUserId = c.get("privyUserId");
     const privyUser = await privy.users()._get(privyUserId);
+    const [profile] = await db
+      .select({ walletAddress: users.walletAddress })
+      .from(users)
+      .where(eq(users.privyUserId, privyUserId))
+      .limit(1);
     const walletAddress = getSolanaEmbeddedWalletAddress(
-      privyUser.linked_accounts
+      privyUser.linked_accounts,
+      profile?.walletAddress,
     );
 
     if (!walletAddress) {

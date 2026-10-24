@@ -1,39 +1,24 @@
 import type { Context } from "hono";
-import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
-import { chatMembers, chats, markets, messages, users } from "../db/schema";
+import { chatMembers, chats, users } from "../db/schema";
 import { walletHoldsToken } from "../lib/solana/token-holdings";
 import { publishChatEvent } from "../lib/chat/pubsub";
+import {
+  chatFields,
+  getChatMembersMap,
+  getChatWithMembers,
+  getCurrentUser,
+  getExistingDmChatId,
+  getGroupMarketByCreatorId,
+  getPrivateGroupChatId,
+  getUnreadCounts,
+  getUserById,
+  getUserByUsername,
+} from "../lib/chat/chat-helpers";
 import type { AppEnv } from "../types/app";
-
-const userFields = {
-  id: users.id,
-  username: users.username,
-  avatar: users.avatar,
-  bio: users.bio,
-};
-
-const chatFields = {
-  id: chats.id,
-  type: chats.type,
-  admin: chats.admin,
-  creatorId: chats.creatorId,
-  createdAt: chats.createdAt,
-  updatedAt: chats.updatedAt,
-};
-
-type ChatMember = {
-  user: {
-    id: string;
-    username: string;
-    avatar: string;
-    bio: string;
-  };
-  joinedAt: Date;
-  lastReadAt: Date | null;
-};
 
 const createDmSchema = z
   .object({
@@ -70,155 +55,19 @@ function getErrorCode(error: unknown) {
     : "";
 }
 
-async function getCurrentUser(privyUserId: string) {
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.privyUserId, privyUserId))
-    .limit(1);
-
-  return user;
-}
-
-async function getUserById(userId: string) {
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  return user;
-}
-
-async function getUserByUsername(username: string) {
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, username.replace(/^@/, "").toLowerCase()))
-    .limit(1);
-
-  return user;
-}
-
-async function getChatMembersMap(chatIds: string[]) {
-  const membersByChatId = new Map<string, ChatMember[]>();
-
-  if (chatIds.length === 0) {
-    return membersByChatId;
-  }
-
-  const memberRows = await db
-    .select({
-      chatId: chatMembers.chatId,
-      user: userFields,
-      joinedAt: chatMembers.joinedAt,
-      lastReadAt: chatMembers.lastReadAt,
-    })
-    .from(chatMembers)
-    .innerJoin(users, eq(chatMembers.userId, users.id))
-    .where(inArray(chatMembers.chatId, chatIds))
-    .orderBy(chatMembers.joinedAt);
-
-  for (const member of memberRows) {
-    const currentMembers = membersByChatId.get(member.chatId) ?? [];
-    currentMembers.push({
-      user: member.user,
-      joinedAt: member.joinedAt,
-      lastReadAt: member.lastReadAt,
-    });
-    membersByChatId.set(member.chatId, currentMembers);
-  }
-
-  return membersByChatId;
-}
-
-async function getUnreadCount(
-  chatId: string,
-  currentUserId: string,
-  lastReadAt: Date | null
-) {
-  const unreadWhere = lastReadAt
-    ? and(
-        eq(messages.chatId, chatId),
-        ne(messages.senderId, currentUserId),
-        gt(messages.createdAt, lastReadAt),
-        isNull(messages.deletedAt)
-      )
-    : and(
-        eq(messages.chatId, chatId),
-        ne(messages.senderId, currentUserId),
-        isNull(messages.deletedAt)
-      );
-
-  const [result] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(messages)
-    .where(unreadWhere);
-
-  return Number(result?.count ?? 0);
-}
-
-async function getChatWithMembers(chatId: string) {
-  const [chat] = await db
-    .select(chatFields)
-    .from(chats)
-    .where(eq(chats.id, chatId))
-    .limit(1);
-
-  if (!chat) {
-    return null;
-  }
-
-  const membersByChatId = await getChatMembersMap([chat.id]);
-
-  return {
-    ...chat,
-    members: membersByChatId.get(chat.id) ?? [],
-  };
-}
-
-async function getGroupMarketByCreatorId(creatorId: string) {
-  const [market] = await db
-    .select({
-      id: markets.id,
-      paymentType: markets.paymentType,
-    })
-    .from(markets)
-    .where(and(eq(markets.userId, creatorId), eq(markets.marketType, "group")))
-    .limit(1);
-
-  return market;
-}
-
-async function getPrivateGroupChatId(creatorId: string) {
-  const [chat] = await db
-    .select({
-      id: chats.id,
-    })
-    .from(chats)
-    .where(
-      and(
-        eq(chats.type, "GROUP"),
-        eq(chats.creatorId, creatorId)
-      )
-    )
-    .limit(1);
-
-  return chat?.id ?? null;
-}
-
 async function createPrivateGroupChat(creatorId: string) {
-  const [newChat] = await db
-    .insert(chats)
-    .values({
-      type: "GROUP",
-      admin: creatorId,
-      creatorId,
-    })
-    .onConflictDoNothing({
-      target: [chats.creatorId, chats.type],
-    })
-    .returning({ id: chats.id });
+  const newChat = await db.transaction(async (tx) => {
+    const [createdChat] = await tx
+      .insert(chats)
+      .values({ type: "GROUP", admin: creatorId, creatorId })
+      .onConflictDoNothing({ target: [chats.creatorId, chats.type] })
+      .returning({ id: chats.id });
+
+    if (!createdChat) return null;
+
+    await tx.insert(chatMembers).values({ chatId: createdChat.id, userId: creatorId }).onConflictDoNothing();
+    return createdChat;
+  });
 
   if (!newChat) {
     const existingChatId = await getPrivateGroupChatId(creatorId);
@@ -230,15 +79,13 @@ async function createPrivateGroupChat(creatorId: string) {
     return existingChatId;
   }
 
-  await db
-    .insert(chatMembers)
-    .values({
-      chatId: newChat.id,
-      userId: creatorId,
-    })
-    .onConflictDoNothing();
-
   return newChat.id;
+}
+
+export async function ensurePrivateGroupForCreator(creatorId: string) {
+  const groupMarket = await getGroupMarketByCreatorId(creatorId);
+  if (!groupMarket || groupMarket.paymentType !== "token") return null;
+  return getOrCreatePrivateGroupChatId(creatorId);
 }
 
 async function getOrCreatePrivateGroupChatId(creatorId: string) {
@@ -249,24 +96,6 @@ async function getOrCreatePrivateGroupChatId(creatorId: string) {
   }
 
   return createPrivateGroupChat(creatorId);
-}
-
-async function getExistingDmChatId(currentUserId: string, targetUserId: string) {
-  const [chat] = await db
-    .select({
-      id: chats.id,
-    })
-    .from(chats)
-    .where(
-      and(
-        eq(chats.type, "DM"),
-        sql`exists (select 1 from ${chatMembers} where ${chatMembers.chatId} = ${chats.id} and ${chatMembers.userId} = ${currentUserId})`,
-        sql`exists (select 1 from ${chatMembers} where ${chatMembers.chatId} = ${chats.id} and ${chatMembers.userId} = ${targetUserId})`
-      )
-    )
-    .limit(1);
-
-  return chat?.id ?? null;
 }
 
 export async function createDmChat(c: Context<AppEnv>) {
@@ -335,28 +164,21 @@ export async function createDmChat(c: Context<AppEnv>) {
       );
     }
 
-    const [newChat] = await db
-      .insert(chats)
-      .values({
-        type: "DM",
-        admin: currentUser.id,
-      })
-      .returning({ id: chats.id });
+    const newChat = await db.transaction(async (tx) => {
+      const [createdChat] = await tx
+        .insert(chats)
+        .values({ type: "DM", admin: currentUser.id })
+        .returning({ id: chats.id });
 
-    if (!newChat) {
-      throw new Error("Failed to create chat");
-    }
+      if (!createdChat) throw new Error("Failed to create chat");
 
-    await db.insert(chatMembers).values([
-      {
-        chatId: newChat.id,
-        userId: currentUser.id,
-      },
-      {
-        chatId: newChat.id,
-        userId: targetUser.id,
-      },
-    ]);
+      await tx.insert(chatMembers).values([
+        { chatId: createdChat.id, userId: currentUser.id },
+        { chatId: createdChat.id, userId: targetUser.id },
+      ]);
+
+      return createdChat;
+    });
 
     const chat = await getChatWithMembers(newChat.id);
 
@@ -436,28 +258,21 @@ export async function createGroupChat(c: Context<AppEnv>) {
       );
     }
 
-    const [newChat] = await db
-      .insert(chats)
-      .values({
-        type: "GROUP",
-        admin: currentUser.id,
-      })
-      .returning({ id: chats.id });
+    const newChat = await db.transaction(async (tx) => {
+      const [createdChat] = await tx
+        .insert(chats)
+        .values({ type: "GROUP", admin: currentUser.id })
+        .returning({ id: chats.id });
 
-    if (!newChat) {
-      throw new Error("Failed to create chat");
-    }
+      if (!createdChat) throw new Error("Failed to create chat");
 
-    await db.insert(chatMembers).values([
-      {
-        chatId: newChat.id,
-        userId: currentUser.id,
-      },
-      ...memberIds.map((userId) => ({
-        chatId: newChat.id,
-        userId,
-      })),
-    ]);
+      await tx.insert(chatMembers).values([
+        { chatId: createdChat.id, userId: currentUser.id },
+        ...memberIds.map((userId) => ({ chatId: createdChat.id, userId })),
+      ]);
+
+      return createdChat;
+    });
 
     const chat = await getChatWithMembers(newChat.id);
 
@@ -527,7 +342,8 @@ export async function getOrCreateMyPrivateGroup(c: Context<AppEnv>) {
       );
     }
 
-    const chatId = await getOrCreatePrivateGroupChatId(currentUser.id);
+    const chatId = await ensurePrivateGroupForCreator(currentUser.id);
+    if (!chatId) return c.json({ success: false, message: "Private group is not configured" }, 404);
     const chat = await getChatWithMembers(chatId);
 
     return c.json(
@@ -681,6 +497,13 @@ export async function getMyChats(c: Context<AppEnv>) {
       );
     }
 
+    // Repair groups for creators whose token was launched before the group
+    // creation hook existed. This also makes the creator appear in their own
+    // private group without requiring them to hold their token.
+    if (currentUser.token) {
+      await ensurePrivateGroupForCreator(currentUser.id);
+    }
+
     const chatRows = await db
       .select({
         ...chatFields,
@@ -691,23 +514,43 @@ export async function getMyChats(c: Context<AppEnv>) {
       .where(eq(chatMembers.userId, currentUser.id))
       .orderBy(desc(chats.updatedAt));
 
-    const chatIds = chatRows.map((chat) => chat.id);
-    const membersByChatId = await getChatMembersMap(chatIds);
-    const unreadCounts = new Map<string, number>();
+    const tokenOwnership = new Map<string, Promise<boolean>>();
+    const ownsToken = (token: string) => {
+      const existing = tokenOwnership.get(token);
+      if (existing) return existing;
+      const check = walletHoldsToken({ walletAddress: currentUser.walletAddress, mintAddress: token });
+      tokenOwnership.set(token, check);
+      return check;
+    };
 
-    await Promise.all(
-      chatRows.map(async (chat) => {
-        unreadCounts.set(
-          chat.id,
-          await getUnreadCount(chat.id, currentUser.id, chat.lastReadAt)
-        );
-      })
-    );
+    const creatorIds = Array.from(new Set(chatRows
+      .filter((chat) => chat.type === "GROUP" && chat.creatorId && chat.creatorId !== currentUser.id)
+      .map((chat) => chat.creatorId as string)));
+    const creatorRows = creatorIds.length > 0
+      ? await db.select({ id: users.id, token: users.token }).from(users).where(inArray(users.id, creatorIds))
+      : [];
+    const creatorTokens = new Map(creatorRows.map((creator) => [creator.id, creator.token]));
+
+    const expiredGroupIds = (await Promise.all(chatRows.map(async (chat) => {
+      if (chat.type !== "GROUP" || !chat.creatorId || chat.creatorId === currentUser.id) return null;
+      const token = creatorTokens.get(chat.creatorId);
+      const hasToken = Boolean(token) && await ownsToken(token ?? "");
+      return hasToken ? null : chat.id;
+    }))).filter((chatId): chatId is string => Boolean(chatId));
+
+    if (expiredGroupIds.length > 0) {
+      await db.delete(chatMembers).where(and(eq(chatMembers.userId, currentUser.id), inArray(chatMembers.chatId, expiredGroupIds)));
+    }
+    const activeChatRows = chatRows.filter((chat) => !expiredGroupIds.includes(chat.id));
+
+    const chatIds = activeChatRows.map((chat) => chat.id);
+    const membersByChatId = await getChatMembersMap(chatIds);
+    const unreadCounts = await getUnreadCounts(activeChatRows, currentUser.id);
 
     return c.json(
       {
         success: true,
-        chats: chatRows.map(({ lastReadAt, ...chat }) => ({
+        chats: activeChatRows.map(({ lastReadAt, ...chat }) => ({
           ...chat,
           lastReadAt,
           unreadCount: unreadCounts.get(chat.id) ?? 0,

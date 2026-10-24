@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
@@ -15,6 +15,8 @@ import {
   getMessageRateLimitKey,
   isRateLimited,
 } from "../lib/chat/rate-limit";
+import { getMessageOwner } from "../lib/chat/chat-helpers";
+import { canDeleteMessage, canEditMessage, canSendDmMessage } from "../lib/chat/message-permissions";
 import { publishChatEvent } from "../lib/chat/pubsub";
 import type { AppEnv } from "../types/app";
 
@@ -34,35 +36,39 @@ function getLimit(c: Context<AppEnv>) {
     : 30;
 }
 
-function getDateQuery(c: Context<AppEnv>, name: "before" | "after") {
-  const value = c.req.query(name);
-  const date = value ? new Date(value) : null;
+type MessageCursor = { createdAt: Date; id: string };
 
-  return date && !Number.isNaN(date.getTime()) ? date : null;
+function getCursorQuery(c: Context<AppEnv>, name: "before" | "after") {
+  const value = c.req.query(name);
+  if (!value) return null;
+
+  try {
+    const decoded = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as { createdAt?: string; id?: string };
+    const createdAt = decoded.createdAt ? new Date(decoded.createdAt) : null;
+    const id = decoded.id && z.string().uuid().safeParse(decoded.id).success ? decoded.id : null;
+    return createdAt && !Number.isNaN(createdAt.getTime()) && id ? { createdAt, id } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function encodeCursor(message: { createdAt: Date; id: string }) {
+  const cursor: MessageCursor = { createdAt: message.createdAt, id: message.id };
+  return Buffer.from(JSON.stringify({ createdAt: cursor.createdAt.toISOString(), id: cursor.id })).toString("base64url");
 }
 
 function getMessageId(c: Context<AppEnv>) {
   return z.string().uuid().safeParse(c.req.param("messageId"));
 }
 
-async function getMessageOwner(messageId: string, chatId: string) {
-  const [message] = await db
-    .select({
-      id: messages.id,
-      senderId: messages.senderId,
-      deletedAt: messages.deletedAt,
-    })
-    .from(messages)
-    .where(and(eq(messages.id, messageId), eq(messages.chatId, chatId)))
-    .limit(1);
-
-  return message;
-}
-
 export async function getMessages(c: Context<AppEnv>) {
   const limit = getLimit(c);
-  const before = getDateQuery(c, "before");
-  const after = getDateQuery(c, "after");
+  const before = getCursorQuery(c, "before");
+  const after = getCursorQuery(c, "after");
+
+  if (before === undefined || after === undefined) {
+    return c.json({ success: false, message: "Invalid message cursor" }, 400);
+  }
 
   if (before && after) {
     return c.json(
@@ -76,9 +82,21 @@ export async function getMessages(c: Context<AppEnv>) {
 
   try {
     const where = before
-      ? and(eq(messages.chatId, c.get("chatId")), lt(messages.createdAt, before))
+      ? and(
+        eq(messages.chatId, c.get("chatId")),
+        or(
+          lt(messages.createdAt, before.createdAt),
+          and(eq(messages.createdAt, before.createdAt), lt(messages.id, before.id)),
+        ),
+      )
       : after
-        ? and(eq(messages.chatId, c.get("chatId")), gt(messages.createdAt, after))
+        ? and(
+          eq(messages.chatId, c.get("chatId")),
+          or(
+            gt(messages.createdAt, after.createdAt),
+            and(eq(messages.createdAt, after.createdAt), gt(messages.id, after.id)),
+          ),
+        )
         : eq(messages.chatId, c.get("chatId"));
 
     const rows = await db
@@ -86,7 +104,10 @@ export async function getMessages(c: Context<AppEnv>) {
       .from(messages)
       .innerJoin(users, eq(messages.senderId, users.id))
       .where(where)
-      .orderBy(after ? asc(messages.createdAt) : desc(messages.createdAt))
+      .orderBy(
+        after ? asc(messages.createdAt) : desc(messages.createdAt),
+        after ? asc(messages.id) : desc(messages.id),
+      )
       .limit(limit + 1);
 
     const hasExtra = rows.length > limit;
@@ -99,8 +120,8 @@ export async function getMessages(c: Context<AppEnv>) {
       {
         success: true,
         messages: orderedMessages,
-        olderCursor: firstMessage?.createdAt.toISOString() ?? null,
-        newerCursor: lastMessage?.createdAt.toISOString() ?? null,
+        olderCursor: firstMessage ? encodeCursor(firstMessage) : null,
+        newerCursor: lastMessage ? encodeCursor(lastMessage) : null,
         hasMoreOlder: after ? false : hasExtra,
         hasMoreNewer: after ? hasExtra : false,
       },
@@ -145,6 +166,10 @@ export async function sendMessage(c: Context<AppEnv>) {
       },
       429
     );
+  }
+
+  if (!(await canSendDmMessage(c.get("chatId"), c.get("currentUserId")))) {
+    return c.json({ success: false, message: "Paid DM messages must be sent through the creator's DM dialog" }, 402);
   }
 
   try {
@@ -218,7 +243,7 @@ export async function editMessage(c: Context<AppEnv>) {
       );
     }
 
-    if (message.senderId !== c.get("currentUserId")) {
+    if (!canEditMessage(message, c.get("currentUserId"))) {
       return c.json(
         {
           success: false,
@@ -295,10 +320,7 @@ export async function removeMessage(c: Context<AppEnv>) {
       );
     }
 
-    if (
-      message.senderId !== c.get("currentUserId") &&
-      c.get("chatAdminId") !== c.get("currentUserId")
-    ) {
+    if (!canDeleteMessage(message, c.get("currentUserId"), c.get("chatAdminId"))) {
       return c.json(
         {
           success: false,

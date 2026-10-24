@@ -51,13 +51,19 @@ const marketWithUserFields = {
   id: markets.id,
   marketType: markets.marketType,
   paymentType: markets.paymentType,
+  accessRule: markets.accessRule,
+  priceAmount: markets.priceAmount,
   createdAt: markets.createdAt,
   updatedAt: markets.updatedAt,
   user: {
     id: users.id,
     username: users.username,
+    displayName: users.displayName,
     avatar: users.avatar,
     bio: users.bio,
+    token: users.token,
+    xConnected: users.xConnected,
+    xUsername: users.xUsername,
   },
 };
 
@@ -109,6 +115,14 @@ export async function createMarket(c: Context<AppEnv>) {
     );
   }
 
+  const accessRule = parsedBody.data.accessRule ??
+    (parsedBody.data.marketType === "group" ? "holders" : "fixed");
+  // Paid DMs are settled in the creator's token. The priceAmount is the
+  // number of creator-token units the buyer deposits into escrow.
+  const paymentType = parsedBody.data.marketType === "dm"
+    ? "token"
+    : parsedBody.data.paymentType;
+
   try {
     const user = await getCurrentUser(privyUserId);
 
@@ -128,11 +142,22 @@ export async function createMarket(c: Context<AppEnv>) {
     );
 
     if (existingMarket) {
+      const [updatedMarket] = await db
+        .update(markets)
+        .set({
+          paymentType,
+          accessRule,
+          priceAmount: accessRule === "holders" ? null : parsedBody.data.priceAmount?.toString() ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(markets.id, existingMarket.id))
+        .returning({ id: markets.id });
+
       return c.json(
         {
           success: true,
-          message: "Market already exists",
-          market: existingMarket,
+          message: "Market updated successfully",
+          market: updatedMarket ? await getMarketByUserAndType(user.id, parsedBody.data.marketType) : existingMarket,
         },
         200
       );
@@ -141,7 +166,9 @@ export async function createMarket(c: Context<AppEnv>) {
     await db.insert(markets).values({
       userId: user.id,
       marketType: parsedBody.data.marketType,
-      paymentType: parsedBody.data.paymentType,
+      paymentType,
+      accessRule,
+      priceAmount: accessRule === "holders" ? null : parsedBody.data.priceAmount?.toString(),
     });
 
     const market = await getMarketByUserAndType(
@@ -389,6 +416,12 @@ export async function updateMarket(c: Context<AppEnv>) {
     );
   }
 
+  const accessRule = parsedBody.data.accessRule ??
+    (parsedBody.data.marketType === "group" ? "holders" : "fixed");
+  const paymentType = parsedBody.data.marketType === "dm"
+    ? "token"
+    : parsedBody.data.paymentType;
+
   try {
     const user = await getCurrentUser(privyUserId);
 
@@ -405,7 +438,9 @@ export async function updateMarket(c: Context<AppEnv>) {
     const [updatedMarket] = await db
       .update(markets)
       .set({
-        paymentType: parsedBody.data.paymentType,
+        paymentType,
+        accessRule,
+        priceAmount: accessRule === "holders" ? null : parsedBody.data.priceAmount?.toString() ?? null,
         updatedAt: new Date(),
       })
       .where(

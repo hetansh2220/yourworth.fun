@@ -1,0 +1,27 @@
+[toolchain]
+package_manager = "yarn"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+worth = "FBYUHStkYfQ9i9ZwVVFB6yXN2iQUGbnQ5aFoxYbYWLCz"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn test:integration"
+
+[test]
+upgradeable = true
+
+[test.validator]
+bind_address = "127.0.0.1"
+rpc_port = 18999
+faucet_port = 19900

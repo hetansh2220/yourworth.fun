@@ -3,20 +3,9 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
-import { chatMembers, chats, users } from "../db/schema";
+import { chatMembers } from "../db/schema";
+import { getChatAccess, getCurrentUser, hasChatAccess } from "../lib/chat/chat-helpers";
 import type { AppEnv } from "../types/app";
-
-async function getCurrentUser(privyUserId: string) {
-  const [user] = await db
-    .select({
-      id: users.id,
-    })
-    .from(users)
-    .where(eq(users.privyUserId, privyUserId))
-    .limit(1);
-
-  return user;
-}
 
 export async function chatMemberMiddleware(c: Context<AppEnv>, next: Next) {
   const parsedChatId = z.string().uuid().safeParse(c.req.param("chatId"));
@@ -44,23 +33,20 @@ export async function chatMemberMiddleware(c: Context<AppEnv>, next: Next) {
       );
     }
 
-    const [membership] = await db
-      .select({
-        chatId: chats.id,
-        chatType: chats.type,
-        chatAdminId: chats.admin,
-      })
-      .from(chatMembers)
-      .innerJoin(chats, eq(chatMembers.chatId, chats.id))
-      .where(
-        and(
-          eq(chatMembers.chatId, parsedChatId.data),
-          eq(chatMembers.userId, user.id)
-        )
-      )
-      .limit(1);
+    const membership = await hasChatAccess(parsedChatId.data, user.id, user.walletAddress);
 
     if (!membership) {
+      const existingMembership = await getChatAccess(parsedChatId.data, user.id);
+      if (existingMembership?.chatType === "GROUP" && existingMembership.creatorId && existingMembership.creatorId !== user.id) {
+        await db.delete(chatMembers).where(and(eq(chatMembers.chatId, parsedChatId.data), eq(chatMembers.userId, user.id)));
+        return c.json(
+          {
+            success: false,
+            message: "Hold the creator token to access this group",
+          },
+          403
+        );
+      }
       return c.json(
         {
           success: false,
@@ -78,12 +64,15 @@ export async function chatMemberMiddleware(c: Context<AppEnv>, next: Next) {
     await next();
   } catch (error) {
     console.error("Chat member middleware error:", error);
+    const temporaryNetworkError = /ECONNRESET|socket connection was closed|fetch failed|Failed to fetch|network/i.test(String(error));
     return c.json(
       {
         success: false,
-        message: "Failed to verify chat access",
+        message: temporaryNetworkError
+          ? "Chat access is temporarily unavailable. Please try again."
+          : "Failed to verify chat access",
       },
-      500
+      temporaryNetworkError ? 503 : 500
     );
   }
 }

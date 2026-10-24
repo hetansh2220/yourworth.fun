@@ -17,6 +17,7 @@ export const messageFields = {
   sender: {
     id: users.id,
     username: users.username,
+    displayName: users.displayName,
     avatar: users.avatar,
   },
 };

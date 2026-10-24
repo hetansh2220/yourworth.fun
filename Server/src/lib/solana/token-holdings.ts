@@ -27,9 +27,19 @@ export async function walletHoldsToken({
     return false;
   }
 
-  const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
-    mint,
-  });
+  let accounts;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      accounts = await connection.getParsedTokenAccountsByOwner(owner, { mint });
+      break;
+    } catch (error) {
+      const retryable = /ECONNRESET|socket connection was closed|fetch failed|Failed to fetch|network/i.test(String(error));
+      if (!retryable || attempt === 2) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+    }
+  }
+
+  if (!accounts) return false;
 
   return accounts.value.some((account) => {
     const parsedAccount = account.account.data.parsed as {

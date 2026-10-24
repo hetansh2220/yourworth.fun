@@ -30,7 +30,11 @@ async function getCurrentUser(privyUserId: string) {
   return user;
 }
 
-async function getDmChatForMembers(chatId: string, userId: string, creatorId: string) {
+async function getDmChatForMembers(
+  chatId: string,
+  userId: string,
+  creatorId: string,
+) {
   const [chat] = await db
     .select({
       id: chats.id,
@@ -41,11 +45,8 @@ async function getDmChatForMembers(chatId: string, userId: string, creatorId: st
       and(
         eq(chats.id, chatId),
         eq(chats.type, "DM"),
-        or(
-          eq(chats.admin, userId),
-          eq(chats.admin, creatorId)
-        )
-      )
+        or(eq(chats.admin, userId), eq(chats.admin, creatorId)),
+      ),
     )
     .limit(1);
 
@@ -65,7 +66,11 @@ async function getDmChatForMembers(chatId: string, userId: string, creatorId: st
   return memberIds.has(userId) && memberIds.has(creatorId) ? chat : null;
 }
 
-async function getMessageInChat(messageId: string, chatId: string, senderId: string) {
+async function getMessageInChat(
+  messageId: string,
+  chatId: string,
+  senderId: string,
+) {
   const [message] = await db
     .select({
       id: messages.id,
@@ -75,8 +80,8 @@ async function getMessageInChat(messageId: string, chatId: string, senderId: str
       and(
         eq(messages.id, messageId),
         eq(messages.chatId, chatId),
-        eq(messages.senderId, senderId)
-      )
+        eq(messages.senderId, senderId),
+      ),
     )
     .limit(1);
 
@@ -93,7 +98,7 @@ export async function createDmRequestRecord(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
@@ -106,14 +111,14 @@ export async function createDmRequestRecord(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
     const chat = await getDmChatForMembers(
       parsedBody.data.chatId,
       currentUser.id,
-      parsedBody.data.creatorId
+      parsedBody.data.creatorId,
     );
 
     if (!chat) {
@@ -122,7 +127,7 @@ export async function createDmRequestRecord(c: Context<AppEnv>) {
           success: false,
           message: "DM chat not found",
         },
-        404
+        404,
       );
     }
 
@@ -130,12 +135,12 @@ export async function createDmRequestRecord(c: Context<AppEnv>) {
       ? await getMessageInChat(
           parsedBody.data.messageId,
           parsedBody.data.chatId,
-          currentUser.id
+          currentUser.id,
         )
       : await createChatMessage(
           parsedBody.data.chatId,
           currentUser.id,
-          parsedBody.data.content?.trim() ?? ""
+          parsedBody.data.content?.trim() ?? "",
         );
 
     if (!message) {
@@ -144,7 +149,7 @@ export async function createDmRequestRecord(c: Context<AppEnv>) {
           success: false,
           message: "Paid DM message not found",
         },
-        404
+        404,
       );
     }
 
@@ -177,7 +182,7 @@ export async function createDmRequestRecord(c: Context<AppEnv>) {
         message: "DM request recorded",
         dmRequest,
       },
-      201
+      201,
     );
   } catch (error) {
     console.error("Create DM request record error:", error);
@@ -186,7 +191,7 @@ export async function createDmRequestRecord(c: Context<AppEnv>) {
         success: false,
         message: "Failed to record DM request",
       },
-      500
+      500,
     );
   }
 }
@@ -201,7 +206,7 @@ export async function getMyDmRequests(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
@@ -211,8 +216,8 @@ export async function getMyDmRequests(c: Context<AppEnv>) {
       .where(
         or(
           eq(dmRequests.userId, currentUser.id),
-          eq(dmRequests.creatorId, currentUser.id)
-        )
+          eq(dmRequests.creatorId, currentUser.id),
+        ),
       )
       .orderBy(desc(dmRequests.createdAt));
 
@@ -221,7 +226,7 @@ export async function getMyDmRequests(c: Context<AppEnv>) {
         success: true,
         dmRequests: rows,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get DM requests error:", error);
@@ -230,7 +235,7 @@ export async function getMyDmRequests(c: Context<AppEnv>) {
         success: false,
         message: "Failed to retrieve DM requests",
       },
-      500
+      500,
     );
   }
 }
@@ -244,7 +249,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
         success: false,
         message: "DM request id is invalid",
       },
-      400
+      400,
     );
   }
 
@@ -257,7 +262,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
@@ -270,7 +275,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
@@ -286,7 +291,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
           success: false,
           message: "DM request not found",
         },
-        404
+        404,
       );
     }
 
@@ -296,7 +301,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
           success: false,
           message: "Only pending DM requests can be updated",
         },
-        400
+        400,
       );
     }
 
@@ -315,24 +320,28 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
           success: false,
           message: "You cannot update this DM request",
         },
-        403
+        403,
       );
     }
 
     const now = new Date();
 
-    if (parsedBody.data.status === "completed" && now > existingRequest.expiresAt) {
+    if (
+      parsedBody.data.status === "completed" &&
+      now > existingRequest.expiresAt
+    ) {
       return c.json(
         {
           success: false,
           message: "Expired DM requests cannot be completed",
         },
-        400
+        400,
       );
     }
 
     if (
-      (parsedBody.data.status === "refunded" || parsedBody.data.status === "expired") &&
+      (parsedBody.data.status === "refunded" ||
+        parsedBody.data.status === "expired") &&
       now < existingRequest.expiresAt
     ) {
       return c.json(
@@ -340,7 +349,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
           success: false,
           message: "DM request has not expired",
         },
-        400
+        400,
       );
     }
 
@@ -385,7 +394,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
         message: "DM request updated",
         dmRequest,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Update DM request status error:", error);
@@ -394,7 +403,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
         success: false,
         message: "Failed to update DM request",
       },
-      500
+      500,
     );
   }
 }

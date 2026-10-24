@@ -1,9 +1,9 @@
 import type { ServerWebSocket } from "bun";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../db";
-import { chatMembers, chats, messages, users } from "../../db/schema";
+import { users } from "../../db/schema";
 import {
   createChatMessage,
   deleteChatMessage,
@@ -16,6 +16,8 @@ import {
   isRateLimited,
 } from "./rate-limit";
 import { getChatTopic } from "./pubsub";
+import { getMessageOwner, hasChatAccess, isTransientNetworkError } from "./chat-helpers";
+import { canDeleteMessage, canEditMessage, canSendDmMessage } from "./message-permissions";
 import { privy } from "../privy";
 
 export type ChatSocketData = {
@@ -25,6 +27,7 @@ export type ChatSocketData = {
 };
 
 const incomingMessageSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("ping") }),
   z.object({
     type: z.literal("message"),
     content: messageContentSchema,
@@ -70,40 +73,12 @@ async function getCurrentUserFromToken(token: string) {
     .verifyAuthToken(token);
 
   const [user] = await db
-    .select({ id: users.id })
+    .select({ id: users.id, walletAddress: users.walletAddress })
     .from(users)
     .where(eq(users.privyUserId, claims.user_id))
     .limit(1);
 
   return user;
-}
-
-async function getChatAccess(chatId: string, userId: string) {
-  const [membership] = await db
-    .select({
-      id: chatMembers.id,
-      chatAdminId: chats.admin,
-    })
-    .from(chatMembers)
-    .innerJoin(chats, eq(chatMembers.chatId, chats.id))
-    .where(and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, userId)))
-    .limit(1);
-
-  return membership;
-}
-
-async function getMessageOwner(messageId: string, chatId: string) {
-  const [message] = await db
-    .select({
-      id: messages.id,
-      senderId: messages.senderId,
-      deletedAt: messages.deletedAt,
-    })
-    .from(messages)
-    .where(and(eq(messages.id, messageId), eq(messages.chatId, chatId)))
-    .limit(1);
-
-  return message;
 }
 
 function sendError(ws: ServerWebSocket<ChatSocketData>, message: string) {
@@ -140,7 +115,7 @@ export async function upgradeChatWebSocket(
       return new Response("Create your user profile first", { status: 404 });
     }
 
-    const access = await getChatAccess(parsedChatId.data, user.id);
+    const access = await hasChatAccess(parsedChatId.data, user.id, user.walletAddress);
 
     if (!access) {
       return new Response("Chat not found", { status: 404 });
@@ -161,7 +136,10 @@ export async function upgradeChatWebSocket(
     return new Response("WebSocket upgrade failed", { status: 400 });
   } catch (error) {
     console.error("Chat websocket upgrade error:", error);
-    return new Response("Invalid or expired token", { status: 401 });
+    return new Response(
+      isTransientNetworkError(error) ? "Chat service temporarily unavailable" : "Invalid or expired token",
+      { status: isTransientNetworkError(error) ? 503 : 401 },
+    );
   }
 }
 
@@ -186,6 +164,11 @@ export const chatWebSocket = {
           ws,
           parsedMessage.error.issues[0]?.message ?? "Invalid message"
         );
+        return;
+      }
+
+      if (parsedMessage.data.type === "ping") {
+        ws.send(JSON.stringify({ type: "pong" }));
         return;
       }
 
@@ -224,6 +207,11 @@ export const chatWebSocket = {
       }
 
       if (parsedMessage.data.type === "message") {
+        if (!(await canSendDmMessage(ws.data.chatId, ws.data.userId))) {
+          sendError(ws, "Paid DM messages must be sent through the creator's DM dialog");
+          return;
+        }
+
         const message = await createChatMessage(
           ws.data.chatId,
           ws.data.userId,
@@ -251,7 +239,7 @@ export const chatWebSocket = {
       }
 
       if (parsedMessage.data.type === "message.edit") {
-        if (existingMessage.senderId !== ws.data.userId) {
+        if (!canEditMessage(existingMessage, ws.data.userId)) {
           sendError(ws, "You can only edit your own messages");
           return;
         }
@@ -277,10 +265,7 @@ export const chatWebSocket = {
         return;
       }
 
-      if (
-        existingMessage.senderId !== ws.data.userId &&
-        ws.data.chatAdminId !== ws.data.userId
-      ) {
+      if (!canDeleteMessage(existingMessage, ws.data.userId, ws.data.chatAdminId)) {
         sendError(ws, "You cannot delete this message");
         return;
       }

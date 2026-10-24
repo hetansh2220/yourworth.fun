@@ -1,0 +1,29 @@
+{
+  "license": "ISC",
+  "scripts": {
+    "init-config": "yarn test:compile && node --env-file=.env .test-dist/scripts/init-config.js",
+    "lint:fix": "prettier \"{client,tests,migrations}/**/*.ts\" --write",
+    "lint": "prettier \"{client,tests,migrations}/**/*.ts\" --check",
+    "test:unit": "yarn test:compile && mocha -t 10000 \".test-dist/tests/unit/**/*.js\"",
+    "test:integration": "yarn test:compile && mocha -t 120000 \".test-dist/tests/**/*.js\"",
+    "typecheck": "tsc --noEmit",
+    "test": "anchor test",
+    "test:compile": "node -e \"require('fs').rmSync('.test-dist', { recursive: true, force: true })\" && tsc --outDir .test-dist"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/spl-token": "0.4.14",
+    "@solana/web3.js": "1.99.0"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.0",
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^9.0.0",
+    "chai": "^4.3.4",
+    "mocha": "^9.0.3",
+    "prettier": "^2.6.2",
+    "ts-mocha": "^10.0.0",
+    "typescript": "^5.7.3"
+  },
+  "type": "commonjs"
+}
