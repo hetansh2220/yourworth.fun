@@ -17,7 +17,7 @@ export type CreateUserInput = {
   username: string;
   displayName: string;
   bio: string;
-  avatar: File;
+  avatar: File | string;
 };
 
 export type UpdateUserInput = {
@@ -28,7 +28,44 @@ export type UpdateUserInput = {
   avatar?: string;
 };
 
-/** Update the signed-in user's profile and return the saved user. */
+export async function checkUsernameAvailability(username: string) {
+  return api<{ success: boolean; available: boolean }>(
+    `/users/availability?username=${encodeURIComponent(username)}`,
+  );
+}
+
+export async function createUser(
+  accessToken: string,
+  input: CreateUserInput,
+): Promise<User> {
+  const body =
+    input.avatar instanceof File
+      ? (() => {
+          const formData = new FormData();
+          formData.set("username", input.username);
+          formData.set("displayName", input.displayName.trim());
+          formData.set("bio", input.bio);
+          formData.set("avatar", input.avatar);
+          return formData;
+        })()
+      : JSON.stringify({
+          username: input.username,
+          displayName: input.displayName.trim(),
+          bio: input.bio,
+          avatar: input.avatar,
+        });
+
+  const response = await api<{ user: User }>("/users", {
+    method: "POST",
+    accessToken,
+    ...(typeof body === "string"
+      ? { headers: { "Content-Type": "application/json" } }
+      : {}),
+    body,
+  });
+  return response.user;
+}
+
 export async function updateUser(
   accessToken: string,
   input: UpdateUserInput,
@@ -42,30 +79,10 @@ export async function updateUser(
   return response.user;
 }
 
-/** Get the signed-in user's profile using a Privy access token. */
 export async function getUser(accessToken: string): Promise<User> {
   const response = await api<{ user: User }>("/users/me", {
     accessToken,
     cache: "no-store",
-  });
-  return response.user;
-}
-
-/** Create a profile. The backend obtains the wallet address from Privy. */
-export async function createUser(
-  accessToken: string,
-  input: CreateUserInput,
-): Promise<User> {
-  const body = new FormData();
-  body.set("username", input.username);
-  body.set("displayName", input.displayName.trim());
-  body.set("bio", input.bio);
-  body.set("avatar", input.avatar);
-
-  const response = await api<{ user: User }>("/users", {
-    method: "POST",
-    accessToken,
-    body,
   });
   return response.user;
 }
