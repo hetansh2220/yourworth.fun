@@ -1,29 +1,40 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
-import { getUser } from "@/utils/api/users";
+import { getUser, type User } from "@/utils/api/users";
 import { ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
+const ProfileContext = createContext<User | null>(null);
+const ProfileUpdateContext = createContext<((profile: User) => void) | null>(null);
+
+export function useUpdateCurrentProfile() {
+  return useContext(ProfileUpdateContext);
+}
+
+export function useCurrentProfile() {
+  return useContext(ProfileContext);
+}
+
 export function ProfileRequired({ children }: { children: ReactNode }) {
   const { ready, authenticated, user, getAccessToken } = usePrivy();
+  const userId = user?.id;
   const router = useRouter();
-  const [verifiedId, setVerifiedId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<User | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!ready || !authenticated || !user) return;
+    if (!ready || !authenticated || !userId) return;
     let cancelled = false;
-    const userId = user.id;
     async function checkProfile() {
       try {
         const token = await getAccessToken();
         if (!token) throw new Error("Your session is unavailable. Please try again.");
-        await getUser(token);
-        if (!cancelled) setVerifiedId(userId);
+        const currentProfile = await getUser(token);
+        if (!cancelled) setProfile(currentProfile);
       } catch (error) {
         if (cancelled) return;
         if (error instanceof ApiError && error.status === 404) {
@@ -35,9 +46,11 @@ export function ProfileRequired({ children }: { children: ReactNode }) {
     }
     void checkProfile();
     return () => { cancelled = true; };
-  }, [ready, authenticated, user, getAccessToken, router, attempt]);
+  }, [ready, authenticated, userId, getAccessToken, router, attempt]);
 
-  if (ready && (!authenticated || (user && verifiedId === user.id))) return children;
+  if (ready && (!authenticated || (user && profile?.privyUserId === user.id))) {
+    return <ProfileUpdateContext.Provider value={setProfile}><ProfileContext.Provider value={authenticated ? profile : null}>{children}</ProfileContext.Provider></ProfileUpdateContext.Provider>;
+  }
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 p-6">

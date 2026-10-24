@@ -25,7 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (!isDashboardPage && !isProfilePage) return <>{children}</>;
 
   return (
-    <ProfileRequired key={pathname}>
+    <ProfileRequired>
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="min-w-0">

@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LogoutDialog } from "@/components/dialogs/logout-dialog";
+import { useCurrentProfile } from "@/components/profile/profile-required";
 
 const groups = [
   {
@@ -49,6 +50,7 @@ const groups = [
 
 export default function AppSidebar() {
   const pathname = usePathname();
+  const profile = useCurrentProfile();
   const { setOpenMobile } = useSidebar();
 
   return (
@@ -114,25 +116,25 @@ export default function AppSidebar() {
             <LogoutDialog />
           </SidebarMenuItem>
         </SidebarMenu>
-        <Link
+        {profile && <Link
           href="/settings/profile"
           onClick={() => setOpenMobile(false)}
           className="flex min-w-0 items-center gap-3 rounded-md px-4 py-3 outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <Avatar className="size-10 shrink-0">
             <AvatarImage
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=160&auto=format&fit=crop"
-              alt="Sophie Bennett"
+              src={profile.avatar}
+              alt={profile.displayName}
             />
-            <AvatarFallback>SB</AvatarFallback>
+            <AvatarFallback>{(profile.displayName || profile.username).trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">Sophie Bennett</p>
+            <p className="truncate text-sm font-medium">{profile.displayName}</p>
             <p className="truncate text-xs text-muted-foreground">
-              @sophiebennett
+              @{profile.username}
             </p>
           </div>
-        </Link>
+        </Link>}
       </SidebarFooter>
     </Sidebar>
   );
