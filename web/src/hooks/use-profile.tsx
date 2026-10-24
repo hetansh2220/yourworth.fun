@@ -112,19 +112,33 @@ export function useCreateProfile(
 
 export function useUpdateProfile(
     options?: Omit<
-        UseMutationOptions<User, Error, UpdateUserInput>,
+        UseMutationOptions<
+            User,
+            Error,
+            Omit<UpdateUserInput, "avatar"> & { avatar?: File | string }
+        >,
         "mutationFn"
     >,
 ) {
     const queryClient = useQueryClient();
     const { getAccessToken } = usePrivy();
+    const { uploadImage } = useCloudinary();
 
     return useMutation({
         ...options,
-        mutationFn: async (input: UpdateUserInput) => {
+        mutationFn: async (
+            input: Omit<UpdateUserInput, "avatar"> & { avatar?: File | string },
+        ) => {
             const accessToken = await getAccessToken();
             if (!accessToken) throw missingTokenError();
-            return updateUser(accessToken, input);
+            const { avatar: avatarInput, ...profileInput } = input;
+            const avatar = avatarInput instanceof File
+                ? await uploadImage(avatarInput)
+                : avatarInput;
+            return updateUser(accessToken, {
+                ...profileInput,
+                ...(avatar ? { avatar } : {}),
+            });
         },
         onSuccess: async (profile, variables, onMutateResult, context) => {
             queryClient.setQueryData(profileQueryKey, profile);

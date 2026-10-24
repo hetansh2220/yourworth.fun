@@ -180,6 +180,7 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                     displayName: profile.name.trim(),
                     username: profile.username.trim(),
                     bio: profile.bio.trim(),
+                    ...(avatarFile ? { avatar: avatarFile } : {}),
                   });
                   const updated = {
                     name: user.displayName,
@@ -224,7 +225,7 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                         .join("") || "?"}
                     </AvatarFallback>
                   </Avatar>
-                  {isCreate && (
+                  {
                     <Button
                       type="button"
                       size="icon"
@@ -237,7 +238,7 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                     >
                       <PencilSimpleIcon className="size-3" aria-hidden="true" />
                     </Button>
-                  )}
+                  }
                 </div>
                 <div className="space-y-2">
                   <input
