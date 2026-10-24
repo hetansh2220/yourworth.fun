@@ -66,11 +66,13 @@ export const createUserSchema = createInsertSchema(users)
   .pick({
     username: true,
     displayName: true,
+    avatar: true,
     bio: true,
   })
   .extend({
     username: usernameSchema,
     displayName: z.string().trim().min(1).max(60),
+    avatar: z.string().url(),
     bio: bioSchema,
   });
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SignOutIcon } from "@phosphor-icons/react";
+import { useClearProfile } from "@/hooks/use-profile";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,8 +19,24 @@ import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
 
 export function LogoutDialog() {
   const [open, setOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
   const { setOpenMobile } = useSidebar();
+  const clearProfile = useClearProfile();
+
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+    try {
+      await clearProfile();
+      setOpen(false);
+      setOpenMobile(false);
+      router.replace("/");
+    } finally {
+      setLoggingOut(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -48,13 +65,10 @@ export function LogoutDialog() {
           <Button
             variant="destructive"
             className="flex-1 border-red-500 bg-red-600 bg-none text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700"
-            onClick={() => {
-              setOpen(false);
-              setOpenMobile(false);
-              router.push("/");
-            }}
+            onClick={() => void handleLogout()}
+            disabled={loggingOut}
           >
-            Logout
+            {loggingOut ? "Logging out…" : "Logout"}
           </Button>
         </DialogFooter>
       </DialogContent>

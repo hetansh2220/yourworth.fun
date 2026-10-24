@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { Hono } from "hono";
-import { getUserByUsername } from "./controllers/users.controller";
+import { getUserByToken } from "./controllers/users.controller";
 import { usersRoute } from "./routes/users";
 import { marketsRoute } from "./routes/markets";
 import { chatsRoute } from "./routes/chats";
@@ -34,7 +34,7 @@ app.route("/markets", marketsRoute);
 app.route("/chats", chatsRoute);
 app.route("/creator-tokens", creatorTokensRoute);
 app.route("/dm-requests", dmRequestsRoute);
-app.get("/:username", getUserByUsername);
+app.get("/:token", getUserByToken);
 
 export default {
   port: 8080,

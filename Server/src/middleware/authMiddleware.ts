@@ -9,7 +9,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function getSolanaEmbeddedWalletAddress(linkedAccounts: unknown[], preferredAddress?: string) {
+export function getSolanaEmbeddedWalletAddress(linkedAccounts: unknown[], preferredAddress?: string) {
   const wallets = linkedAccounts.filter(
     (account) =>
       isRecord(account) &&

@@ -2,62 +2,10 @@ import type { Context } from "hono";
 import { desc, eq, lt } from "drizzle-orm";
 
 import { db } from "../db";
-import { cloudinary } from "../lib/cloudinary";
-import { uploadAvatarFile } from "../lib/upload-avatar";
 import { createUserSchema, updateUserSchema, users } from "../db/schema";
 import type { AppEnv } from "../types/app";
-import { createHash, createHmac, randomBytes } from "node:crypto";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function signXState(value: string) {
-  const secret = process.env.X_STATE_SECRET ?? process.env.X_CLIENT_SECRET;
-  if (!secret) throw new Error("X_STATE_SECRET is not configured");
-  return `${value}.${createHmac("sha256", secret).update(value).digest("base64url")}`;
-}
-
-function readXState(state: string) {
-  const [value, signature] = state.split(".");
-  const secret = process.env.X_STATE_SECRET ?? process.env.X_CLIENT_SECRET;
-  if (!value || !signature || !secret) return null;
-  const expected = createHmac("sha256", secret).update(value).digest("base64url");
-  return expected === signature ? JSON.parse(Buffer.from(value, "base64url").toString()) as { privyUserId: string; verifier: string } : null;
-}
-
-export async function startXConnection(c: Context<AppEnv>) {
-  const clientId = process.env.X_CLIENT_ID;
-  const redirectUri = process.env.X_REDIRECT_URI;
-  if (!clientId || !redirectUri) return c.json({ success: false, message: "X OAuth is not configured" }, 500);
-  const verifier = randomBytes(32).toString("base64url");
-  const challenge = createHash("sha256").update(verifier).digest("base64url");
-  const state = signXState(Buffer.from(JSON.stringify({ privyUserId: c.get("privyUserId"), verifier })).toString("base64url"));
-  const url = new URL("https://twitter.com/i/oauth2/authorize");
-  url.search = new URLSearchParams({ response_type: "code", client_id: clientId, redirect_uri: redirectUri, scope: "users.read tweet.read", state, code_challenge: challenge, code_challenge_method: "S256" }).toString();
-  return c.json({ success: true, url: url.toString() });
-}
-
-export async function completeXConnection(c: Context<AppEnv>) {
-  const code = c.req.query("code");
-  const state = c.req.query("state");
-  const parsed = state ? readXState(state) : null;
-  if (!code || !parsed) return c.redirect(`${process.env.CLIENT_ORIGIN ?? "http://localhost:3000"}/create-market?x=error`);
-  try {
-    const basic = Buffer.from(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`).toString("base64");
-    const tokenResponse = await fetch("https://api.x.com/2/oauth2/token", { method: "POST", headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, grant_type: "authorization_code", redirect_uri: process.env.X_REDIRECT_URI ?? "", code_verifier: parsed.verifier }) });
-    const token = await tokenResponse.json() as { access_token?: string };
-    if (!token.access_token) throw new Error("X token exchange failed");
-    const profileResponse = await fetch("https://api.x.com/2/users/me", { headers: { Authorization: `Bearer ${token.access_token}` } });
-    const profile = await profileResponse.json() as { data?: { id: string; username: string } };
-    if (!profile.data) throw new Error("X profile lookup failed");
-    await db.update(users).set({ xConnected: true, xUserId: profile.data.id, xUsername: profile.data.username, updatedAt: new Date() }).where(eq(users.privyUserId, parsed.privyUserId));
-    return c.redirect(`${process.env.CLIENT_ORIGIN ?? "http://localhost:3000"}/create-market?x=connected`);
-  } catch (error) {
-    console.error("X connection error:", error);
-    return c.redirect(`${process.env.CLIENT_ORIGIN ?? "http://localhost:3000"}/create-market?x=error`);
-  }
-}
+import { privy } from "../lib/privy";
+import { getSolanaEmbeddedWalletAddress } from "../middleware/authMiddleware";
 
 function getErrorCode(error: unknown) {
   return typeof error === "object" &&
@@ -68,32 +16,13 @@ function getErrorCode(error: unknown) {
     : "";
 }
 
-function getUsernameParam(c: Context<AppEnv>) {
-  return (c.req.param().username ?? "").trim().toLowerCase();
+function getTokenParam(c: Context<AppEnv>) {
+  return (c.req.param().token ?? "").trim();
 }
 
 export async function createUser(c: Context<AppEnv>) {
-  const formData = await c.req.formData().catch(() => null);
-
-  if (!formData) {
-    return c.json(
-      {
-        success: false,
-        message: "Invalid form data",
-      },
-      400
-    );
-  }
-
-  const username = formData.get("username");
-    const displayName = formData.get("displayName");
-  const bio = formData.get("bio");
-  const avatar = formData.get("avatar");
-  const parsedBody = createUserSchema.safeParse({
-    username: typeof username === "string" ? username : "",
-    displayName: typeof displayName === "string" ? displayName : "",
-    bio: typeof bio === "string" ? bio : "",
-  });
+  const body = await c.req.json().catch(() => null);
+  const parsedBody = createUserSchema.safeParse(body);
 
   if (!parsedBody.success) {
     return c.json(
@@ -105,21 +34,22 @@ export async function createUser(c: Context<AppEnv>) {
     );
   }
 
-  if (!(avatar instanceof File) || avatar.size === 0) {
-    return c.json(
-      {
-        success: false,
-        message: "Avatar image is required",
-      },
-      400
-    );
-  }
-
-  let uploadedAvatar: Awaited<ReturnType<typeof uploadAvatarFile>> | null = null;
-
   try {
     const privyUserId = c.get("privyUserId");
-    const walletAddress = c.get("walletAddress");
+    const privyUser = await privy.users()._get(privyUserId);
+    const walletAddress = getSolanaEmbeddedWalletAddress(
+      privyUser.linked_accounts,
+    );
+
+    if (!walletAddress) {
+      return c.json(
+        {
+          success: false,
+          message: "Solana wallet is not ready",
+        },
+        400,
+      );
+    }
     const cleanUsername = parsedBody.data.username.trim().toLowerCase();
     const cleanDisplayName = parsedBody.data.displayName.trim();
     const cleanBio = parsedBody.data.bio.trim();
@@ -157,8 +87,6 @@ export async function createUser(c: Context<AppEnv>) {
       );
     }
 
-    uploadedAvatar = await uploadAvatarFile(avatar);
-
     const [newUser] = await db
       .insert(users)
       .values({
@@ -166,7 +94,7 @@ export async function createUser(c: Context<AppEnv>) {
         username: cleanUsername,
         displayName: cleanDisplayName,
         walletAddress,
-        avatar: uploadedAvatar.secure_url,
+        avatar: parsedBody.data.avatar,
         bio: cleanBio,
       })
       .returning();
@@ -182,17 +110,6 @@ export async function createUser(c: Context<AppEnv>) {
   } catch (error) {
     console.error("Create user error:", error);
 
-    if (uploadedAvatar?.public_id) {
-      try {
-        await cloudinary.uploader.destroy(uploadedAvatar.public_id, {
-          resource_type: "image",
-          invalidate: true,
-        });
-      } catch (cleanupError) {
-        console.error("Avatar cleanup error:", cleanupError);
-      }
-    }
-
     if (getErrorCode(error) === "23505") {
       return c.json(
         {
@@ -201,38 +118,6 @@ export async function createUser(c: Context<AppEnv>) {
         },
         409
       );
-    }
-
-    if (error instanceof Error) {
-      if (error.message === "Avatar must be an image") {
-        return c.json(
-          {
-            success: false,
-            message: error.message,
-          },
-          400
-        );
-      }
-
-      if (error.message === "Avatar must be smaller than 5MB") {
-        return c.json(
-          {
-            success: false,
-            message: error.message,
-          },
-          413
-        );
-      }
-
-      if (error.message === "Missing CLOUDINARY_UPLOAD_PRESET") {
-        return c.json(
-          {
-            success: false,
-            message: "Avatar upload is not configured",
-          },
-          500
-        );
-      }
     }
 
     return c.json(
@@ -284,14 +169,14 @@ export async function getMe(c: Context<AppEnv>) {
   }
 }
 
-export async function getUserByUsername(c: Context<AppEnv>) {
-  const username = getUsernameParam(c);
+export async function getUserByToken(c: Context<AppEnv>) {
+  const token = getTokenParam(c);
 
-  if (!username) {
+  if (!token) {
     return c.json(
       {
         success: false,
-        message: "Username is required",
+        message: "Token parameter is required",
       },
       400
     );
@@ -303,15 +188,13 @@ export async function getUserByUsername(c: Context<AppEnv>) {
         id: users.id,
         username: users.username,
         displayName: users.displayName,
-        xConnected: users.xConnected,
-        xUsername: users.xUsername,
         token: users.token,
         avatar: users.avatar,
         bio: users.bio,
         createdAt: users.createdAt,
       })
       .from(users)
-      .where(eq(users.username, username))
+      .where(eq(users.token, token ))
       .limit(1);
 
     if (!user) {
@@ -332,7 +215,7 @@ export async function getUserByUsername(c: Context<AppEnv>) {
       200
     );
   } catch (error) {
-    console.error("Get user by username error:", error);
+    console.error("Get user by token error:", error);
     return c.json(
       {
         success: false,
@@ -402,6 +285,26 @@ export async function getUsers(c: Context<AppEnv>) {
       500
     );
   }
+}
+
+export async function checkUsernameAvailability(c: Context<AppEnv>) {
+  const username = (c.req.query("username") ?? "").trim().toLowerCase();
+  const parsed = createUserSchema.shape.username.safeParse(username);
+
+  if (!parsed.success) {
+    return c.json(
+      { success: false, available: false, message: "Invalid username" },
+      400,
+    );
+  }
+
+  const [existingUser] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.username, parsed.data))
+    .limit(1);
+
+  return c.json({ success: true, available: !existingUser }, 200);
 }
 
 export async function updateUser(c: Context<AppEnv>) {
@@ -516,28 +419,5 @@ export async function updateUser(c: Context<AppEnv>) {
       },
       500
     );
-  }
-}
-
-export async function syncWallet(c: Context<AppEnv>) {
-  const body = await c.req.json().catch(() => null) as { walletAddress?: unknown } | null;
-  const walletAddress = typeof body?.walletAddress === "string" ? body.walletAddress.trim() : "";
-  if (!walletAddress) return c.json({ success: false, message: "Wallet address is required" }, 400);
-
-  try {
-    const privyUser = await (await import("../lib/privy")).privy.users()._get(c.get("privyUserId"));
-    const linkedWallet = privyUser.linked_accounts.find((account) =>
-      isRecord(account) && account.type === "wallet" && account.chain_type === "solana" && account.address === walletAddress,
-    );
-    if (!linkedWallet) return c.json({ success: false, message: "Wallet is not linked to this Privy account" }, 403);
-
-    const [updatedUser] = await db.update(users)
-      .set({ walletAddress, updatedAt: new Date() })
-      .where(eq(users.privyUserId, c.get("privyUserId")))
-      .returning();
-    return c.json({ success: true, user: updatedUser }, 200);
-  } catch (error) {
-    console.error("Sync wallet error:", error);
-    return c.json({ success: false, message: "Failed to sync wallet" }, 500);
   }
 }
