@@ -12,23 +12,17 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
 
-  privyUserId: text("privy_user_id").notNull().unique(),
-
   username: varchar("username", {
     length: 20,
   })
     .notNull()
     .unique(),
 
-  displayName: varchar("display_name", { length: 60 }).notNull(),
+  name: varchar("name", { length: 60 }).notNull(),
 
-  xConnected: boolean("x_connected"),
+  verified: boolean("verified").notNull().default(false),
 
-  xUserId: text("x_user_id"),
-
-  xUsername: varchar("x_username", { length: 100 }),
-
-  walletAddress: text("wallet_address").notNull().unique(),
+  address: text("address").notNull().unique(),
 
   avatar: text("avatar").notNull(),
 
@@ -67,25 +61,27 @@ export const createUserSchema = createInsertSchema(users)
     username: true,
     displayName: true,
     avatar: true,
+    name: true,
     bio: true,
   })
   .extend({
     username: usernameSchema,
     displayName: z.string().trim().min(1).max(60),
     avatar: z.string().url(),
+    name: z.string().trim().min(1).max(60),
     bio: bioSchema,
   });
 
 export const updateUserSchema = createInsertSchema(users)
   .pick({
     username: true,
-    displayName: true,
+    name: true,
     avatar: true,
     bio: true,
   })
   .extend({
     username: usernameSchema.optional(),
-    displayName: z.string().trim().min(1).max(60).optional(),
+    name: z.string().trim().min(1).max(60).optional(),
     avatar: z.string().url().optional(),
     bio: bioSchema.optional(),
   });
