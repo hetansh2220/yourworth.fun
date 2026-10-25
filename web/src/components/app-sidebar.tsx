@@ -124,12 +124,12 @@ export default function AppSidebar() {
           <Avatar className="size-10 shrink-0">
             <AvatarImage
               src={profile.avatar}
-              alt={profile.displayName}
+              alt={profile.name}
             />
-            <AvatarFallback>{(profile.displayName || profile.username).trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</AvatarFallback>
+            <AvatarFallback>{(profile.name || profile.username).trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{profile.displayName}</p>
+            <p className="truncate text-sm font-medium">{profile.name}</p>
             <p className="truncate text-xs text-muted-foreground">
               @{profile.username}
             </p>

@@ -33,7 +33,7 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
   const startingProfile =
     !isCreate && currentProfile
       ? {
-          name: currentProfile.displayName,
+          name: currentProfile.name,
           username: currentProfile.username,
           bio: currentProfile.bio,
           image: currentProfile.avatar,
@@ -145,7 +145,7 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                   try {
                     await createProfile.mutateAsync({
                       username: profile.username.trim(),
-                      displayName: profile.name.trim(),
+                      name: profile.name.trim(),
                       bio: profile.bio.trim(),
                       avatar: avatarFile,
                     });
@@ -177,13 +177,13 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                 setStatus("");
                 try {
                   const user = await updateProfile.mutateAsync({
-                    displayName: profile.name.trim(),
+                    name: profile.name.trim(),
                     username: profile.username.trim(),
                     bio: profile.bio.trim(),
                     ...(avatarFile ? { avatar: avatarFile } : {}),
                   });
                   const updated = {
-                    name: user.displayName,
+                    name: user.name,
                     username: user.username,
                     bio: user.bio,
                     image: user.avatar,
@@ -262,7 +262,7 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
               <fieldset disabled={submitting} className="grid gap-5">
                 <div className="grid gap-2">
                   <label htmlFor="profile-name" className="text-sm">
-                    Display name
+                    Name
                   </label>
                   <Input
                     id="profile-name"
