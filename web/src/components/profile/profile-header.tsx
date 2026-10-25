@@ -16,6 +16,7 @@ type ProfileHeaderProps = {
   responseRate?: number;
   contractAddress?: string;
   xUsername?: string;
+  reviewedUserId?: string;
 };
 
 export function ProfileHeader({
@@ -30,6 +31,7 @@ export function ProfileHeader({
   responseRate,
   contractAddress,
   xUsername,
+  reviewedUserId,
 }: ProfileHeaderProps) {
   const initials = name
     .trim()
@@ -80,6 +82,9 @@ export function ProfileHeader({
         <ProfileActions
           contractAddress={contractAddress}
           xUsername={xUsername}
+          reviewedUserId={reviewedUserId}
+          name={name}
+          avatar={imageSrc}
         />
       </div>
     </section>

@@ -6,15 +6,23 @@ import {
   CopyIcon,
   XLogoIcon,
   BookmarkSimpleIcon,
+  StarIcon,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
+import { ReviewDialog } from "@/components/dialogs/review-dialog";
 
 export function ProfileActions({
   contractAddress,
   xUsername,
+  reviewedUserId,
+  name = "Creator",
+  avatar,
 }: {
   contractAddress?: string;
   xUsername?: string;
+  reviewedUserId?: string;
+  name?: string;
+  avatar?: string;
 }) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
   async function copyAddress() {
@@ -78,6 +86,19 @@ export function ProfileActions({
         <Button variant="outline" className="size-10 rounded-lg">
           <BookmarkSimpleIcon aria-hidden="true" />
         </Button>
+        <ReviewDialog
+          reviewedUserId={reviewedUserId ?? "demo-user-id"}
+          name={name}
+          avatar={avatar}
+        >
+          <Button
+            variant="outline"
+            className="size-10 rounded-lg"
+            aria-label={`Review ${name}`}
+          >
+            <StarIcon aria-hidden="true" />
+          </Button>
+        </ReviewDialog>
       </div>
       <p
         role="status"
