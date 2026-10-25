@@ -1,8 +1,8 @@
 import type { Context } from "hono";
 import { and, eq } from "drizzle-orm";
-import { db } from "../db";
-import { createWatchlistSchema, users, watchlist } from "../db/schema";
-import type { AppEnv } from "../types/app";
+import { db } from "@/db";
+import { createWatchlistSchema, users, watchlist } from "@/db/schema";
+import type { AppEnv } from "@/types/app";
 
 // Only trust identity supplied by authentication middleware.
 async function getOwner(c: Context<AppEnv>) {

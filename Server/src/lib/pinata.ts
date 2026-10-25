@@ -48,10 +48,7 @@ async function parsePinataResponse(response: Response) {
   return JSON.parse(text) as PinataIpfsResponse;
 }
 
-export async function uploadFileToPinata(
-  filePath: string,
-  name?: string
-) {
+export async function uploadFileToPinata(filePath: string, name?: string) {
   const file = Bun.file(filePath);
   const exists = await file.exists();
 
@@ -67,7 +64,7 @@ export async function uploadFileToPinata(
     "pinataMetadata",
     JSON.stringify({
       name: fileName,
-    })
+    }),
   );
 
   const response = await fetch(PINATA_API_URL + "/pinFileToIPFS", {
@@ -88,7 +85,7 @@ export async function uploadFileToPinata(
 
 export async function uploadJsonToPinata(
   content: Record<string, unknown>,
-  name: string
+  name: string,
 ) {
   const response = await fetch(PINATA_API_URL + "/pinJSONToIPFS", {
     method: "POST",
@@ -125,7 +122,7 @@ export async function createTokenMetadataUri({
   if (imagePath) {
     const imageUpload = await uploadFileToPinata(
       imagePath,
-      symbol.toLowerCase() + "-image"
+      symbol.toLowerCase() + "-image",
     );
 
     finalImageUrl = imageUpload.uri;
@@ -133,7 +130,7 @@ export async function createTokenMetadataUri({
 
   if (!finalImageUrl) {
     throw new Error(
-      "Missing token image. Provide TEST_TOKEN_IMAGE_PATH or TEST_TOKEN_IMAGE_URL."
+      "Missing token image. Provide TEST_TOKEN_IMAGE_PATH or TEST_TOKEN_IMAGE_URL.",
     );
   }
 
@@ -146,7 +143,7 @@ export async function createTokenMetadataUri({
 
   const metadataUpload = await uploadJsonToPinata(
     metadata,
-    metadataName ?? symbol.toLowerCase() + "-metadata.json"
+    metadataName ?? symbol.toLowerCase() + "-metadata.json",
   );
 
   return {
