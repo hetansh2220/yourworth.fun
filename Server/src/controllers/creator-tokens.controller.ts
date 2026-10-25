@@ -9,7 +9,12 @@ import {
   settleTradingFeesDevnet,
 } from "../lib/meteora/creator-token-launch";
 import { prepareCreatorTokenLaunch } from "../lib/meteora/creator-token-launch";
-import { Connection, PublicKey, SendTransactionError, Transaction } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  SendTransactionError,
+  Transaction,
+} from "@solana/web3.js";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
@@ -47,17 +52,24 @@ const prepareSwapSchema = z.object({
   minimumAmountOut: z.string().regex(/^\d+$/),
 });
 const submitSwapSchema = z.object({ signedTransaction: z.string().min(20) });
-const settleFeesSchema = z.object({ creatorUsername: z.string().trim().min(1).max(20) });
+const settleFeesSchema = z.object({
+  creatorUsername: z.string().trim().min(1).max(20),
+});
 
 const chartRangeSchema = z.enum(["1d", "7d", "30d"]).default("1d");
 
 function tokenBalanceAtAddress(
-  balances: Array<{ accountIndex: number; uiTokenAmount: { amount: string } }> | null | undefined,
+  balances:
+    | Array<{ accountIndex: number; uiTokenAmount: { amount: string } }>
+    | null
+    | undefined,
   accountKeys: Array<{ pubkey: PublicKey }>,
   address: string,
 ) {
   if (!balances) return null;
-  const balance = balances.find((item) => accountKeys[item.accountIndex]?.pubkey.toBase58() === address);
+  const balance = balances.find(
+    (item) => accountKeys[item.accountIndex]?.pubkey.toBase58() === address,
+  );
   return balance ? BigInt(balance.uiTokenAmount.amount) : null;
 }
 
@@ -71,7 +83,9 @@ async function resolveCreatorPool(
   // to a valid DBC pool for a different token, and Meteora would then reject
   // the swap with "Pool not found" or build the wrong accounts.
   try {
-    const discovered = await client.state.getPoolByBaseMint(new PublicKey(creator.token));
+    const discovered = await client.state.getPoolByBaseMint(
+      new PublicKey(creator.token),
+    );
     if (discovered) {
       const address = discovered.publicKey;
       if (address.toBase58() !== creator.poolAddress) {
@@ -98,25 +112,47 @@ async function resolveCreatorPool(
 
 export async function getCreatorTokenChart(c: Context<AppEnv>) {
   const username = c.req.param("username");
-  if (!username) return c.json({ success: false, message: "Username is required" }, 400);
+  if (!username)
+    return c.json({ success: false, message: "Username is required" }, 400);
 
   try {
-    const [creator] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    const [creator] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username))
+      .limit(1);
     if (!creator?.token) {
-      return c.json({ success: false, message: "Creator trading pool is unavailable" }, 404);
+      return c.json(
+        { success: false, message: "Creator trading pool is unavailable" },
+        404,
+      );
     }
 
     const range = chartRangeSchema.parse(c.req.query("range"));
-    const connection = new Connection(process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com", "confirmed");
+    const connection = new Connection(
+      process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
+      "confirmed",
+    );
     const client = new DynamicBondingCurveClient(connection, "confirmed");
     const resolvedPool = await resolveCreatorPool(client, creator);
-    if (!resolvedPool) return c.json({ success: false, message: "Creator pool was not found on-chain" }, 404);
+    if (!resolvedPool)
+      return c.json(
+        { success: false, message: "Creator pool was not found on-chain" },
+        404,
+      );
     const { address: poolAddress, pool } = resolvedPool;
 
     const baseReserve = Number(pool.poolState.baseReserve.toString());
     const quoteReserve = Number(pool.poolState.quoteReserve.toString());
-    if (!Number.isFinite(baseReserve) || !Number.isFinite(quoteReserve) || baseReserve <= 0) {
-      return c.json({ success: false, message: "Creator pool reserves are unavailable" }, 409);
+    if (
+      !Number.isFinite(baseReserve) ||
+      !Number.isFinite(quoteReserve) ||
+      baseReserve <= 0
+    ) {
+      return c.json(
+        { success: false, message: "Creator pool reserves are unavailable" },
+        409,
+      );
     }
 
     // Both the creator token and Devnet USDC use six decimals. The decimal
@@ -125,23 +161,54 @@ export async function getCreatorTokenChart(c: Context<AppEnv>) {
 
     const rangeDays = range === "1d" ? 1 : range === "7d" ? 7 : 30;
     const cutoff = Math.floor(Date.now() / 1000) - rangeDays * 24 * 60 * 60;
-    const signatures = await connection.getSignaturesForAddress(poolAddress, { limit: 500 }, "confirmed");
+    const signatures = await connection.getSignaturesForAddress(
+      poolAddress,
+      { limit: 500 },
+      "confirmed",
+    );
     const historicalSignatures = signatures
-      .filter((item) => item.blockTime !== null && item.blockTime !== undefined && item.blockTime >= cutoff)
+      .filter(
+        (item) =>
+          item.blockTime !== null &&
+          item.blockTime !== undefined &&
+          item.blockTime >= cutoff,
+      )
       .map((item) => item.signature);
-    const transactions = await connection.getParsedTransactions(historicalSignatures, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    });
+    const transactions = await connection.getParsedTransactions(
+      historicalSignatures,
+      {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      },
+    );
     const baseVault = pool.poolState.baseVault.toBase58();
     const quoteVault = pool.poolState.quoteVault.toBase58();
     const points = transactions
       .flatMap((transaction, index) => {
-        if (!transaction?.meta || transaction.blockTime === null || transaction.blockTime === undefined) return [];
+        if (
+          !transaction?.meta ||
+          transaction.blockTime === null ||
+          transaction.blockTime === undefined
+        )
+          return [];
         const accountKeys = transaction.transaction.message.accountKeys;
-        const postBase = tokenBalanceAtAddress(transaction.meta.postTokenBalances, accountKeys, baseVault);
-        const postQuote = tokenBalanceAtAddress(transaction.meta.postTokenBalances, accountKeys, quoteVault);
-        if (postBase === null || postQuote === null || postBase <= 0n || !historicalSignatures[index]) return [];
+        const postBase = tokenBalanceAtAddress(
+          transaction.meta.postTokenBalances,
+          accountKeys,
+          baseVault,
+        );
+        const postQuote = tokenBalanceAtAddress(
+          transaction.meta.postTokenBalances,
+          accountKeys,
+          quoteVault,
+        );
+        if (
+          postBase === null ||
+          postQuote === null ||
+          postBase <= 0n ||
+          !historicalSignatures[index]
+        )
+          return [];
         const pointPrice = Number(postQuote) / Number(postBase);
         return Number.isFinite(pointPrice) && pointPrice > 0
           ? [{ time: transaction.blockTime * 1000, price: pointPrice }]
@@ -150,31 +217,49 @@ export async function getCreatorTokenChart(c: Context<AppEnv>) {
       .sort((a, b) => a.time - b.time)
       .slice(-120);
 
-    return c.json({
-      success: true,
-      username: creator.username,
-      token: creator.token,
-      poolAddress: poolAddress.toBase58(),
-      price,
-      timestamp: Date.now(),
-      range,
-      points,
-    }, 200);
+    return c.json(
+      {
+        success: true,
+        username: creator.username,
+        token: creator.token,
+        poolAddress: poolAddress.toBase58(),
+        price,
+        timestamp: Date.now(),
+        range,
+        points,
+      },
+      200,
+    );
   } catch (error) {
     console.error("Get creator token chart error:", error);
-    return c.json({ success: false, message: "Failed to load creator token chart" }, 500);
+    return c.json(
+      { success: false, message: "Failed to load creator token chart" },
+      500,
+    );
   }
 }
 
 export async function submitCreatorTokenSwap(c: Context<AppEnv>) {
-  const parsed = submitSwapSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ success: false, message: "Invalid signed transaction" }, 400);
-  const connection = new Connection(process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com", "confirmed");
+  const parsed = submitSwapSchema.safeParse(
+    await c.req.json().catch(() => null),
+  );
+  if (!parsed.success)
+    return c.json(
+      { success: false, message: "Invalid signed transaction" },
+      400,
+    );
+  const connection = new Connection(
+    process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
+    "confirmed",
+  );
   try {
     const rawTransaction = Buffer.from(parsed.data.signedTransaction, "base64");
     const transaction = Transaction.from(rawTransaction);
     const feePayer = transaction.feePayer?.toBase58() ?? "missing";
-    const balance = feePayer === "missing" ? null : await connection.getBalance(new PublicKey(feePayer), "confirmed");
+    const balance =
+      feePayer === "missing"
+        ? null
+        : await connection.getBalance(new PublicKey(feePayer), "confirmed");
     console.log("Swap submit diagnostics", {
       rpc: process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
       feePayer,
@@ -186,7 +271,10 @@ export async function submitCreatorTokenSwap(c: Context<AppEnv>) {
         signed: Boolean(item.signature),
       })),
     });
-    const signature = await connection.sendRawTransaction(rawTransaction, { skipPreflight: false, maxRetries: 3 });
+    const signature = await connection.sendRawTransaction(rawTransaction, {
+      skipPreflight: false,
+      maxRetries: 3,
+    });
     await connection.confirmTransaction(signature, "confirmed");
     return c.json({ success: true, signature }, 200);
   } catch (error) {
@@ -196,63 +284,111 @@ export async function submitCreatorTokenSwap(c: Context<AppEnv>) {
       simulationLogs = await error.getLogs(connection).catch(() => undefined);
       console.error("Swap simulation logs:", simulationLogs);
     }
-    return c.json({
-      success: false,
-      message: error instanceof Error ? error.message : "Failed to submit swap",
-      ...(simulationLogs ? { logs: simulationLogs } : {}),
-    }, 500);
+    return c.json(
+      {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Failed to submit swap",
+        ...(simulationLogs ? { logs: simulationLogs } : {}),
+      },
+      500,
+    );
   }
 }
 
 export async function prepareCreatorTokenSwap(c: Context<AppEnv>) {
-  const parsed = prepareSwapSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ success: false, message: "Invalid swap request" }, 400);
+  const parsed = prepareSwapSchema.safeParse(
+    await c.req.json().catch(() => null),
+  );
+  if (!parsed.success)
+    return c.json({ success: false, message: "Invalid swap request" }, 400);
   try {
-    const [creator] = await db.select().from(users).where(eq(users.username, parsed.data.creatorUsername)).limit(1);
+    const [creator] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, parsed.data.creatorUsername))
+      .limit(1);
     const currentUser = await getCurrentUser(c.get("walletAddress"));
     const walletAddress = c.get("walletAddress");
-    if (!currentUser) return c.json({ success: false, message: "Create your user profile first" }, 404);
-    if (!walletAddress) return c.json({ success: false, message: "Your Solana wallet is not ready" }, 400);
-    if (!creator?.token) return c.json({ success: false, message: "Creator trading pool is unavailable" }, 404);
+    if (!currentUser)
+      return c.json(
+        { success: false, message: "Create your user profile first" },
+        404,
+      );
+    if (!walletAddress)
+      return c.json(
+        { success: false, message: "Your Solana wallet is not ready" },
+        400,
+      );
+    if (!creator?.token)
+      return c.json(
+        { success: false, message: "Creator trading pool is unavailable" },
+        404,
+      );
     const owner = new PublicKey(walletAddress);
-    const connection = new Connection(process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com", "confirmed");
+    const connection = new Connection(
+      process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
+      "confirmed",
+    );
     const client = new DynamicBondingCurveClient(connection, "confirmed");
     const resolvedPool = await resolveCreatorPool(client, creator);
     if (!resolvedPool) {
-      return c.json({
-        success: false,
-        message: "Creator pool was not found on-chain. Relaunch the creator token pool.",
-      }, 404);
+      return c.json(
+        {
+          success: false,
+          message:
+            "Creator pool was not found on-chain. Relaunch the creator token pool.",
+        },
+        404,
+      );
     }
     const { address: poolAddress, pool: poolState } = resolvedPool;
     if (poolState.poolState.quoteReserve.toString() === "0") {
-      return c.json({
-        success: false,
-        message: "This creator pool has no USDC liquidity. Create a new pool with initial liquidity before trading.",
-      }, 409);
+      return c.json(
+        {
+          success: false,
+          message:
+            "This creator pool has no USDC liquidity. Create a new pool with initial liquidity before trading.",
+        },
+        409,
+      );
     }
     const baseMint = poolState.poolState.baseMint;
     const inputMint = parsed.data.side === "sell" ? baseMint : USDC_DEVNET;
-    const inputAta = getAssociatedTokenAddressSync(inputMint, owner, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID);
-    const inputBalance = await connection.getTokenAccountBalance(inputAta, "confirmed").catch(() => null);
+    const inputAta = getAssociatedTokenAddressSync(
+      inputMint,
+      owner,
+      false,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+    const inputBalance = await connection
+      .getTokenAccountBalance(inputAta, "confirmed")
+      .catch(() => null);
     const requestedAmount = BigInt(parsed.data.amountIn);
     if (!inputBalance) {
-      return c.json({
-        success: false,
-        message: `Your wallet has no input token account for ${inputMint.toBase58()}.`,
-        walletAddress,
-        inputMint: inputMint.toBase58(),
-      }, 400);
+      return c.json(
+        {
+          success: false,
+          message: `Your wallet has no input token account for ${inputMint.toBase58()}.`,
+          walletAddress,
+          inputMint: inputMint.toBase58(),
+        },
+        400,
+      );
     }
     if (BigInt(inputBalance.value.amount) < requestedAmount) {
-      return c.json({
-        success: false,
-        message: `Insufficient ${parsed.data.side === "sell" ? "creator token" : "USDC"} balance. Wallet ${walletAddress} has ${inputBalance.value.uiAmountString}, but this trade requires ${inputBalance.value.uiAmountString === "0" ? parsed.data.amountIn : "more than the available balance"}.`,
-        walletAddress,
-        inputMint: inputMint.toBase58(),
-        available: inputBalance.value.uiAmountString,
-        requestedBaseUnits: parsed.data.amountIn,
-      }, 400);
+      return c.json(
+        {
+          success: false,
+          message: `Insufficient ${parsed.data.side === "sell" ? "creator token" : "USDC"} balance. Wallet ${walletAddress} has ${inputBalance.value.uiAmountString}, but this trade requires ${inputBalance.value.uiAmountString === "0" ? parsed.data.amountIn : "more than the available balance"}.`,
+          walletAddress,
+          inputMint: inputMint.toBase58(),
+          available: inputBalance.value.uiAmountString,
+          requestedBaseUnits: parsed.data.amountIn,
+        },
+        400,
+      );
     }
     console.log("Swap prepare diagnostics", {
       walletAddress,
@@ -279,17 +415,62 @@ export async function prepareCreatorTokenSwap(c: Context<AppEnv>) {
     transaction.feePayer = owner;
     transaction.recentBlockhash = blockhash;
     const creatorTokenMint = baseMint;
-    const creatorTokenAta = getAssociatedTokenAddressSync(creatorTokenMint, owner, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID);
-    const usdcAta = getAssociatedTokenAddressSync(USDC_DEVNET, owner, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID);
+    const creatorTokenAta = getAssociatedTokenAddressSync(
+      creatorTokenMint,
+      owner,
+      false,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+    const usdcAta = getAssociatedTokenAddressSync(
+      USDC_DEVNET,
+      owner,
+      false,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
     const ataInstructions = [
-      createAssociatedTokenAccountIdempotentInstruction(owner, creatorTokenAta, owner, creatorTokenMint, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID),
-      createAssociatedTokenAccountIdempotentInstruction(owner, usdcAta, owner, USDC_DEVNET, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID),
+      createAssociatedTokenAccountIdempotentInstruction(
+        owner,
+        creatorTokenAta,
+        owner,
+        creatorTokenMint,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      ),
+      createAssociatedTokenAccountIdempotentInstruction(
+        owner,
+        usdcAta,
+        owner,
+        USDC_DEVNET,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      ),
     ];
-    transaction.instructions = [...ataInstructions, ...transaction.instructions];
-    return c.json({ success: true, transaction: transaction.serialize({ requireAllSignatures: false }).toString("base64"), side: parsed.data.side }, 200);
+    transaction.instructions = [
+      ...ataInstructions,
+      ...transaction.instructions,
+    ];
+    return c.json(
+      {
+        success: true,
+        transaction: transaction
+          .serialize({ requireAllSignatures: false })
+          .toString("base64"),
+        side: parsed.data.side,
+      },
+      200,
+    );
   } catch (error) {
     console.error("Prepare creator token swap error:", error);
-    return c.json({ success: false, message: error instanceof Error ? error.message : "Failed to prepare swap" }, 500);
+    return c.json(
+      {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Failed to prepare swap",
+      },
+      500,
+    );
   }
 }
 
@@ -297,17 +478,37 @@ export async function prepareMyCreatorToken(c: Context<AppEnv>) {
   const body = await c.req.json().catch(() => ({}));
   const parsedBody = creatorTokenLaunchSchema.safeParse(body);
   if (!parsedBody.success) {
-    return c.json({ success: false, message: parsedBody.error.issues[0]?.message ?? "Invalid request body" }, 400);
+    return c.json(
+      {
+        success: false,
+        message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
+      },
+      400,
+    );
   }
 
   try {
     const user = await getCurrentUser(c.get("walletAddress"));
-    if (!user) return c.json({ success: false, message: "Create your user profile first" }, 404);
-    if (user.token) return c.json({ success: true, message: "Creator token already launched", token: user.token }, 200);
+    if (!user)
+      return c.json(
+        { success: false, message: "Create your user profile first" },
+        404,
+      );
+    if (user.token)
+      return c.json(
+        {
+          success: true,
+          message: "Creator token already launched",
+          token: user.token,
+        },
+        200,
+      );
 
     const name = getDefaultTokenName(user.name, user.username);
     const symbol = getDefaultSymbol(user.name, user.username);
-    const description = parsedBody.data.description ?? (user.bio || `${user.username} creator token on Worth`);
+    const description =
+      parsedBody.data.description ??
+      (user.bio || `${user.username} creator token on Worth`);
     const launch = await prepareCreatorTokenLaunch({
       name,
       symbol,
@@ -320,42 +521,83 @@ export async function prepareMyCreatorToken(c: Context<AppEnv>) {
     return c.json({ success: true, launch }, 200);
   } catch (error) {
     console.error("Prepare creator token launch error:", error);
-    return c.json({ success: false, message: "Failed to prepare token launch" }, 500);
+    return c.json(
+      { success: false, message: "Failed to prepare token launch" },
+      500,
+    );
   }
 }
 
 export async function confirmMyCreatorToken(c: Context<AppEnv>) {
-  const parsedBody = confirmCreatorTokenSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsedBody.success) return c.json({ success: false, message: "Invalid confirmation payload" }, 400);
+  const parsedBody = confirmCreatorTokenSchema.safeParse(
+    await c.req.json().catch(() => null),
+  );
+  if (!parsedBody.success)
+    return c.json(
+      { success: false, message: "Invalid confirmation payload" },
+      400,
+    );
 
   try {
     const user = await getCurrentUser(c.get("walletAddress"));
-    if (!user) return c.json({ success: false, message: "Create your user profile first" }, 404);
+    if (!user)
+      return c.json(
+        { success: false, message: "Create your user profile first" },
+        404,
+      );
     if (user.token) return c.json({ success: true, token: user.token }, 200);
 
     const connection = new (await import("@solana/web3.js")).Connection(
-      process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com", "confirmed"
+      process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
+      "confirmed",
     );
     const statuses = await connection.getSignatureStatuses([
       parsedBody.data.createConfigSignature,
       parsedBody.data.createPoolSignature,
     ]);
-    if (statuses.value.some((status) => !status || status.err || !status.confirmationStatus)) {
-      return c.json({ success: false, message: "Token launch transactions are not confirmed" }, 400);
+    if (
+      statuses.value.some(
+        (status) => !status || status.err || !status.confirmationStatus,
+      )
+    ) {
+      return c.json(
+        {
+          success: false,
+          message: "Token launch transactions are not confirmed",
+        },
+        400,
+      );
     }
 
     const mint = new PublicKey(parsedBody.data.mintAddress);
     const mintAccount = await connection.getAccountInfo(mint, "confirmed");
     if (!mintAccount || mintAccount.data.length === 0) {
-      return c.json({ success: false, message: "Token mint was not found on-chain" }, 400);
+      return c.json(
+        { success: false, message: "Token mint was not found on-chain" },
+        400,
+      );
     }
 
-    const [updatedUser] = await db.update(users).set({ token: mint.toBase58(), updatedAt: new Date() }).where(eq(users.id, user.id)).returning();
+    const [updatedUser] = await db
+      .update(users)
+      .set({ token: mint.toBase58(), updatedAt: new Date() })
+      .where(eq(users.id, user.id))
+      .returning();
     await ensurePrivateGroupForCreator(user.id);
-    return c.json({ success: true, message: "Creator token confirmed", token: updatedUser?.token }, 200);
+    return c.json(
+      {
+        success: true,
+        message: "Creator token confirmed",
+        token: updatedUser?.token,
+      },
+      200,
+    );
   } catch (error) {
     console.error("Confirm creator token launch error:", error);
-    return c.json({ success: false, message: "Failed to confirm token launch" }, 500);
+    return c.json(
+      { success: false, message: "Failed to confirm token launch" },
+      500,
+    );
   }
 }
 
@@ -392,7 +634,7 @@ export async function getMyCreatorToken(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
@@ -401,7 +643,7 @@ export async function getMyCreatorToken(c: Context<AppEnv>) {
         success: true,
         token: user.token || null,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get creator token error:", error);
@@ -411,7 +653,7 @@ export async function getMyCreatorToken(c: Context<AppEnv>) {
         success: false,
         message: "Failed to retrieve creator token",
       },
-      500
+      500,
     );
   }
 }
@@ -425,10 +667,9 @@ export async function launchMyCreatorToken(c: Context<AppEnv>) {
     return c.json(
       {
         success: false,
-        message:
-          parsedBody.error.issues[0]?.message ?? "Invalid request body",
+        message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
@@ -441,7 +682,7 @@ export async function launchMyCreatorToken(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
@@ -464,7 +705,7 @@ export async function launchMyCreatorToken(c: Context<AppEnv>) {
             token: user.token,
             poolAddress: existingPool.address.toBase58(),
           },
-          200
+          200,
         );
       }
 
@@ -512,7 +753,7 @@ export async function launchMyCreatorToken(c: Context<AppEnv>) {
         token: launchedToken.mintAddress,
         launch: launchedToken,
       },
-      201
+      201,
     );
   } catch (error) {
     console.error("Launch creator token error:", error);
@@ -524,7 +765,7 @@ export async function launchMyCreatorToken(c: Context<AppEnv>) {
             success: false,
             message: "Pinata is not configured",
           },
-          500
+          500,
         );
       }
 
@@ -534,7 +775,7 @@ export async function launchMyCreatorToken(c: Context<AppEnv>) {
             success: false,
             message: "Token launch wallet is not configured",
           },
-          500
+          500,
         );
       }
     }
@@ -542,17 +783,25 @@ export async function launchMyCreatorToken(c: Context<AppEnv>) {
     return c.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : "Failed to launch creator token",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to launch creator token",
       },
-      500
+      500,
     );
   }
 }
 
 export async function settleCreatorTradingFees(c: Context<AppEnv>) {
-  const parsed = settleFeesSchema.safeParse(await c.req.json().catch(() => null));
+  const parsed = settleFeesSchema.safeParse(
+    await c.req.json().catch(() => null),
+  );
   if (!parsed.success) {
-    return c.json({ success: false, message: "Creator username is required" }, 400);
+    return c.json(
+      { success: false, message: "Creator username is required" },
+      400,
+    );
   }
 
   try {
@@ -563,7 +812,10 @@ export async function settleCreatorTradingFees(c: Context<AppEnv>) {
       .limit(1);
 
     if (!creator?.token) {
-      return c.json({ success: false, message: "Creator token is not launched" }, 404);
+      return c.json(
+        { success: false, message: "Creator token is not launched" },
+        404,
+      );
     }
 
     const connection = new Connection(
@@ -573,14 +825,18 @@ export async function settleCreatorTradingFees(c: Context<AppEnv>) {
     const client = new DynamicBondingCurveClient(connection, "confirmed");
     const resolvedPool = await resolveCreatorPool(client, creator);
     if (!resolvedPool) {
-      return c.json({ success: false, message: "Creator pool was not found on-chain" }, 404);
+      return c.json(
+        { success: false, message: "Creator pool was not found on-chain" },
+        404,
+      );
     }
 
     if (!resolvedPool.pool.poolState.isMigrated) {
       return c.json(
         {
           success: false,
-          message: "Creator token has not graduated yet. Fees remain pending in Meteora.",
+          message:
+            "Creator token has not graduated yet. Fees remain pending in Meteora.",
           graduated: false,
         },
         409,
@@ -598,7 +854,10 @@ export async function settleCreatorTradingFees(c: Context<AppEnv>) {
     return c.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : "Failed to settle trading fees",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to settle trading fees",
       },
       500,
     );

@@ -130,7 +130,7 @@ export async function createMarket(c: Context<AppEnv>) {
         .update(markets)
         .set({
           paymentType,
-        amount: parsedBody.data.amount.toString(),
+          amount: parsedBody.data.amount.toString(),
           updatedAt: new Date(),
         })
         .where(eq(markets.id, existingMarket.id))

@@ -34,7 +34,9 @@ export type ChatMember = {
 
 export function isTransientNetworkError(error: unknown) {
   const message = String(error);
-  return /ECONNRESET|socket connection was closed|fetch failed|Failed to fetch|network/i.test(message);
+  return /ECONNRESET|socket connection was closed|fetch failed|Failed to fetch|network/i.test(
+    message,
+  );
 }
 
 async function withNetworkRetry<T>(operation: () => Promise<T>, attempts = 2) {
@@ -54,17 +56,19 @@ async function withNetworkRetry<T>(operation: () => Promise<T>, attempts = 2) {
 }
 
 export async function getCurrentUser(walletAddress: string) {
-  const [user] = await withNetworkRetry(() => db
-    .select()
-    .from(users)
-    .where(eq(users.address, walletAddress))
-    .limit(1));
+  const [user] = await withNetworkRetry(() =>
+    db.select().from(users).where(eq(users.address, walletAddress)).limit(1),
+  );
 
   return user;
 }
 
 export async function getUserById(userId: string) {
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
   return user;
 }
 
@@ -96,7 +100,11 @@ export async function getChatMembersMap(chatIds: string[]) {
 
   for (const member of memberRows) {
     const current = membersByChatId.get(member.chatId) ?? [];
-    current.push({ user: member.user, joinedAt: member.joinedAt, lastReadAt: member.lastReadAt });
+    current.push({
+      user: member.user,
+      joinedAt: member.joinedAt,
+      lastReadAt: member.lastReadAt,
+    });
     membersByChatId.set(member.chatId, current);
   }
 
@@ -110,11 +118,20 @@ export async function getUnreadCounts(
   const counts = new Map<string, number>();
   if (chatsToCount.length === 0) return counts;
 
-  const conditions = chatsToCount.map(({ id, lastReadAt }) => (
+  const conditions = chatsToCount.map(({ id, lastReadAt }) =>
     lastReadAt
-      ? and(eq(messages.chatId, id), ne(messages.senderId, currentUserId), gt(messages.createdAt, lastReadAt), isNull(messages.deletedAt))
-      : and(eq(messages.chatId, id), ne(messages.senderId, currentUserId), isNull(messages.deletedAt))
-  ));
+      ? and(
+          eq(messages.chatId, id),
+          ne(messages.senderId, currentUserId),
+          gt(messages.createdAt, lastReadAt),
+          isNull(messages.deletedAt),
+        )
+      : and(
+          eq(messages.chatId, id),
+          ne(messages.senderId, currentUserId),
+          isNull(messages.deletedAt),
+        ),
+  );
 
   const rows = await db
     .select({ chatId: messages.chatId, count: sql<number>`count(*)::int` })
@@ -127,7 +144,11 @@ export async function getUnreadCounts(
 }
 
 export async function getChatWithMembers(chatId: string) {
-  const [chat] = await db.select(chatFields).from(chats).where(eq(chats.id, chatId)).limit(1);
+  const [chat] = await db
+    .select(chatFields)
+    .from(chats)
+    .where(eq(chats.id, chatId))
+    .limit(1);
   if (!chat) return null;
 
   const membersByChatId = await getChatMembersMap([chat.id]);
@@ -135,26 +156,43 @@ export async function getChatWithMembers(chatId: string) {
 }
 
 export async function getChatAccess(chatId: string, userId: string) {
-  const [membership] = await withNetworkRetry(() => db
-    .select({
-      chatId: chats.id,
-      chatType: chats.type,
-      chatAdminId: chats.admin,
-    })
-    .from(chatMembers)
-    .innerJoin(chats, eq(chatMembers.chatId, chats.id))
-    .where(and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, userId)))
-    .limit(1));
+  const [membership] = await withNetworkRetry(() =>
+    db
+      .select({
+        chatId: chats.id,
+        chatType: chats.type,
+        chatAdminId: chats.admin,
+      })
+      .from(chatMembers)
+      .innerJoin(chats, eq(chatMembers.chatId, chats.id))
+      .where(
+        and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, userId)),
+      )
+      .limit(1),
+  );
 
   return membership;
 }
 
-export async function hasChatAccess(chatId: string, userId: string, walletAddress: string) {
+export async function hasChatAccess(
+  chatId: string,
+  userId: string,
+  walletAddress: string,
+) {
   const access = await getChatAccess(chatId, userId);
   if (!access) return null;
-  if (access.chatType !== "GROUP" || !access.chatAdminId || access.chatAdminId === userId) return access;
+  if (
+    access.chatType !== "GROUP" ||
+    !access.chatAdminId ||
+    access.chatAdminId === userId
+  )
+    return access;
 
-  const [creator] = await db.select({ token: users.token }).from(users).where(eq(users.id, access.chatAdminId)).limit(1);
+  const [creator] = await db
+    .select({ token: users.token })
+    .from(users)
+    .where(eq(users.id, access.chatAdminId))
+    .limit(1);
   const hasToken = creator?.token
     ? await walletHoldsToken({ walletAddress, mintAddress: creator.token })
     : false;
@@ -181,15 +219,20 @@ export async function getPrivateGroupChatId(creatorId: string) {
   return chat?.id ?? null;
 }
 
-export async function getExistingDmChatId(currentUserId: string, targetUserId: string) {
+export async function getExistingDmChatId(
+  currentUserId: string,
+  targetUserId: string,
+) {
   const [chat] = await db
     .select({ id: chats.id })
     .from(chats)
-    .where(and(
-      eq(chats.type, "DM"),
-      sql`exists (select 1 from ${chatMembers} where ${chatMembers.chatId} = ${chats.id} and ${chatMembers.userId} = ${currentUserId})`,
-      sql`exists (select 1 from ${chatMembers} where ${chatMembers.chatId} = ${chats.id} and ${chatMembers.userId} = ${targetUserId})`,
-    ))
+    .where(
+      and(
+        eq(chats.type, "DM"),
+        sql`exists (select 1 from ${chatMembers} where ${chatMembers.chatId} = ${chats.id} and ${chatMembers.userId} = ${currentUserId})`,
+        sql`exists (select 1 from ${chatMembers} where ${chatMembers.chatId} = ${chats.id} and ${chatMembers.userId} = ${targetUserId})`,
+      ),
+    )
     .limit(1);
 
   return chat?.id ?? null;
@@ -197,7 +240,11 @@ export async function getExistingDmChatId(currentUserId: string, targetUserId: s
 
 export async function getMessageOwner(messageId: string, chatId: string) {
   const [message] = await db
-    .select({ id: messages.id, senderId: messages.senderId, deletedAt: messages.deletedAt })
+    .select({
+      id: messages.id,
+      senderId: messages.senderId,
+      deletedAt: messages.deletedAt,
+    })
     .from(messages)
     .where(and(eq(messages.id, messageId), eq(messages.chatId, chatId)))
     .limit(1);

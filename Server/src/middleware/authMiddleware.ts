@@ -1,5 +1,5 @@
 import type { Context, Next } from "hono";
-import { privy } from "../lib/privy";
+import privy from "../lib/privy";
 import type { AppEnv } from "../types/app";
 
 function isRecord(value: unknown): value is Record<string, unknown> {

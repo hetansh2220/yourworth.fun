@@ -4,7 +4,11 @@ import { z } from "zod";
 
 import { db } from "../db";
 import { chatMembers } from "../db/schema";
-import { getChatAccess, getCurrentUser, hasChatAccess } from "../lib/chat/chat-helpers";
+import {
+  getChatAccess,
+  getCurrentUser,
+  hasChatAccess,
+} from "../lib/chat/chat-helpers";
 import type { AppEnv } from "../types/app";
 
 export async function chatMemberMiddleware(c: Context<AppEnv>, next: Next) {
@@ -16,7 +20,7 @@ export async function chatMemberMiddleware(c: Context<AppEnv>, next: Next) {
         success: false,
         message: "Chat id is invalid",
       },
-      400
+      400,
     );
   }
 
@@ -29,22 +33,40 @@ export async function chatMemberMiddleware(c: Context<AppEnv>, next: Next) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
-    const membership = await hasChatAccess(parsedChatId.data, user.id, user.address);
+    const membership = await hasChatAccess(
+      parsedChatId.data,
+      user.id,
+      user.address,
+    );
 
     if (!membership) {
-      const existingMembership = await getChatAccess(parsedChatId.data, user.id);
-      if (existingMembership?.chatType === "GROUP" && existingMembership.chatAdminId && existingMembership.chatAdminId !== user.id) {
-        await db.delete(chatMembers).where(and(eq(chatMembers.chatId, parsedChatId.data), eq(chatMembers.userId, user.id)));
+      const existingMembership = await getChatAccess(
+        parsedChatId.data,
+        user.id,
+      );
+      if (
+        existingMembership?.chatType === "GROUP" &&
+        existingMembership.chatAdminId &&
+        existingMembership.chatAdminId !== user.id
+      ) {
+        await db
+          .delete(chatMembers)
+          .where(
+            and(
+              eq(chatMembers.chatId, parsedChatId.data),
+              eq(chatMembers.userId, user.id),
+            ),
+          );
         return c.json(
           {
             success: false,
             message: "Hold the creator token to access this group",
           },
-          403
+          403,
         );
       }
       return c.json(
@@ -52,7 +74,7 @@ export async function chatMemberMiddleware(c: Context<AppEnv>, next: Next) {
           success: false,
           message: "Chat not found",
         },
-        404
+        404,
       );
     }
 
@@ -64,7 +86,10 @@ export async function chatMemberMiddleware(c: Context<AppEnv>, next: Next) {
     await next();
   } catch (error) {
     console.error("Chat member middleware error:", error);
-    const temporaryNetworkError = /ECONNRESET|socket connection was closed|fetch failed|Failed to fetch|network/i.test(String(error));
+    const temporaryNetworkError =
+      /ECONNRESET|socket connection was closed|fetch failed|Failed to fetch|network/i.test(
+        String(error),
+      );
     return c.json(
       {
         success: false,
@@ -72,7 +97,7 @@ export async function chatMemberMiddleware(c: Context<AppEnv>, next: Next) {
           ? "Chat access is temporarily unavailable. Please try again."
           : "Failed to verify chat access",
       },
-      temporaryNetworkError ? 503 : 500
+      temporaryNetworkError ? 503 : 500,
     );
   }
 }
@@ -84,7 +109,7 @@ export async function groupAdminMiddleware(c: Context<AppEnv>, next: Next) {
         success: false,
         message: "Only group chats can be managed",
       },
-      400
+      400,
     );
   }
 
@@ -94,7 +119,7 @@ export async function groupAdminMiddleware(c: Context<AppEnv>, next: Next) {
         success: false,
         message: "Only the group admin can manage members",
       },
-      403
+      403,
     );
   }
 

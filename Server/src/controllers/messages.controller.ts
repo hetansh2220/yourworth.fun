@@ -11,12 +11,13 @@ import {
   messageFields,
   updateChatMessageContent,
 } from "../lib/chat/messages";
-import {
-  getMessageRateLimitKey,
-  isRateLimited,
-} from "../lib/chat/rate-limit";
+import { getMessageRateLimitKey, isRateLimited } from "../lib/chat/rate-limit";
 import { getMessageOwner } from "../lib/chat/chat-helpers";
-import { canDeleteMessage, canEditMessage, canSendDmMessage } from "../lib/chat/message-permissions";
+import {
+  canDeleteMessage,
+  canEditMessage,
+  canSendDmMessage,
+} from "../lib/chat/message-permissions";
 import { publishChatEvent } from "../lib/chat/pubsub";
 import type { AppEnv } from "../types/app";
 
@@ -43,18 +44,33 @@ function getCursorQuery(c: Context<AppEnv>, name: "before" | "after") {
   if (!value) return null;
 
   try {
-    const decoded = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as { createdAt?: string; id?: string };
+    const decoded = JSON.parse(
+      Buffer.from(value, "base64url").toString("utf8"),
+    ) as { createdAt?: string; id?: string };
     const createdAt = decoded.createdAt ? new Date(decoded.createdAt) : null;
-    const id = decoded.id && z.string().uuid().safeParse(decoded.id).success ? decoded.id : null;
-    return createdAt && !Number.isNaN(createdAt.getTime()) && id ? { createdAt, id } : undefined;
+    const id =
+      decoded.id && z.string().uuid().safeParse(decoded.id).success
+        ? decoded.id
+        : null;
+    return createdAt && !Number.isNaN(createdAt.getTime()) && id
+      ? { createdAt, id }
+      : undefined;
   } catch {
     return undefined;
   }
 }
 
 function encodeCursor(message: { createdAt: Date; id: string }) {
-  const cursor: MessageCursor = { createdAt: message.createdAt, id: message.id };
-  return Buffer.from(JSON.stringify({ createdAt: cursor.createdAt.toISOString(), id: cursor.id })).toString("base64url");
+  const cursor: MessageCursor = {
+    createdAt: message.createdAt,
+    id: message.id,
+  };
+  return Buffer.from(
+    JSON.stringify({
+      createdAt: cursor.createdAt.toISOString(),
+      id: cursor.id,
+    }),
+  ).toString("base64url");
 }
 
 function getMessageId(c: Context<AppEnv>) {
@@ -76,27 +92,33 @@ export async function getMessages(c: Context<AppEnv>) {
         success: false,
         message: "Use before or after, not both",
       },
-      400
+      400,
     );
   }
 
   try {
     const where = before
       ? and(
-        eq(messages.chatId, c.get("chatId")),
-        or(
-          lt(messages.createdAt, before.createdAt),
-          and(eq(messages.createdAt, before.createdAt), lt(messages.id, before.id)),
-        ),
-      )
-      : after
-        ? and(
           eq(messages.chatId, c.get("chatId")),
           or(
-            gt(messages.createdAt, after.createdAt),
-            and(eq(messages.createdAt, after.createdAt), gt(messages.id, after.id)),
+            lt(messages.createdAt, before.createdAt),
+            and(
+              eq(messages.createdAt, before.createdAt),
+              lt(messages.id, before.id),
+            ),
           ),
         )
+      : after
+        ? and(
+            eq(messages.chatId, c.get("chatId")),
+            or(
+              gt(messages.createdAt, after.createdAt),
+              and(
+                eq(messages.createdAt, after.createdAt),
+                gt(messages.id, after.id),
+              ),
+            ),
+          )
         : eq(messages.chatId, c.get("chatId"));
 
     const rows = await db
@@ -112,7 +134,9 @@ export async function getMessages(c: Context<AppEnv>) {
 
     const hasExtra = rows.length > limit;
     const visibleMessages = rows.slice(0, limit);
-    const orderedMessages = after ? visibleMessages : visibleMessages.toReversed();
+    const orderedMessages = after
+      ? visibleMessages
+      : visibleMessages.toReversed();
     const firstMessage = orderedMessages.at(0);
     const lastMessage = orderedMessages.at(-1);
 
@@ -125,7 +149,7 @@ export async function getMessages(c: Context<AppEnv>) {
         hasMoreOlder: after ? false : hasExtra,
         hasMoreNewer: after ? hasExtra : false,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get messages error:", error);
@@ -134,7 +158,7 @@ export async function getMessages(c: Context<AppEnv>) {
         success: false,
         message: "Failed to retrieve messages",
       },
-      500
+      500,
     );
   }
 }
@@ -149,34 +173,44 @@ export async function sendMessage(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
   if (
-    isRateLimited(getMessageRateLimitKey(c.get("chatId"), c.get("currentUserId")), {
-      limit: 20,
-      windowMs: 10_000,
-    })
+    isRateLimited(
+      getMessageRateLimitKey(c.get("chatId"), c.get("currentUserId")),
+      {
+        limit: 20,
+        windowMs: 10_000,
+      },
+    )
   ) {
     return c.json(
       {
         success: false,
         message: "You are sending messages too quickly",
       },
-      429
+      429,
     );
   }
 
   if (!(await canSendDmMessage(c.get("chatId"), c.get("currentUserId")))) {
-    return c.json({ success: false, message: "Paid DM messages must be sent through the creator's DM dialog" }, 402);
+    return c.json(
+      {
+        success: false,
+        message:
+          "Paid DM messages must be sent through the creator's DM dialog",
+      },
+      402,
+    );
   }
 
   try {
     const chatMessage = await createChatMessage(
       c.get("chatId"),
       c.get("currentUserId"),
-      parsedBody.data.content.trim()
+      parsedBody.data.content.trim(),
     );
 
     publishChatEvent(c.get("chatId"), {
@@ -190,7 +224,7 @@ export async function sendMessage(c: Context<AppEnv>) {
         message: "Message sent successfully",
         chatMessage,
       },
-      201
+      201,
     );
   } catch (error) {
     console.error("Send message error:", error);
@@ -199,7 +233,7 @@ export async function sendMessage(c: Context<AppEnv>) {
         success: false,
         message: "Failed to send message",
       },
-      500
+      500,
     );
   }
 }
@@ -213,7 +247,7 @@ export async function editMessage(c: Context<AppEnv>) {
         success: false,
         message: "Message id is invalid",
       },
-      400
+      400,
     );
   }
 
@@ -226,12 +260,15 @@ export async function editMessage(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
   try {
-    const message = await getMessageOwner(parsedMessageId.data, c.get("chatId"));
+    const message = await getMessageOwner(
+      parsedMessageId.data,
+      c.get("chatId"),
+    );
 
     if (!message) {
       return c.json(
@@ -239,7 +276,7 @@ export async function editMessage(c: Context<AppEnv>) {
           success: false,
           message: "Message not found",
         },
-        404
+        404,
       );
     }
 
@@ -249,7 +286,7 @@ export async function editMessage(c: Context<AppEnv>) {
           success: false,
           message: "You can only edit your own messages",
         },
-        403
+        403,
       );
     }
 
@@ -259,14 +296,14 @@ export async function editMessage(c: Context<AppEnv>) {
           success: false,
           message: "Deleted messages cannot be edited",
         },
-        400
+        400,
       );
     }
 
     const chatMessage = await updateChatMessageContent(
       c.get("chatId"),
       parsedMessageId.data,
-      parsedBody.data.content.trim()
+      parsedBody.data.content.trim(),
     );
 
     publishChatEvent(c.get("chatId"), {
@@ -280,7 +317,7 @@ export async function editMessage(c: Context<AppEnv>) {
         message: "Message updated successfully",
         chatMessage,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Edit message error:", error);
@@ -289,7 +326,7 @@ export async function editMessage(c: Context<AppEnv>) {
         success: false,
         message: "Failed to edit message",
       },
-      500
+      500,
     );
   }
 }
@@ -303,12 +340,15 @@ export async function removeMessage(c: Context<AppEnv>) {
         success: false,
         message: "Message id is invalid",
       },
-      400
+      400,
     );
   }
 
   try {
-    const message = await getMessageOwner(parsedMessageId.data, c.get("chatId"));
+    const message = await getMessageOwner(
+      parsedMessageId.data,
+      c.get("chatId"),
+    );
 
     if (!message) {
       return c.json(
@@ -316,17 +356,19 @@ export async function removeMessage(c: Context<AppEnv>) {
           success: false,
           message: "Message not found",
         },
-        404
+        404,
       );
     }
 
-    if (!canDeleteMessage(message, c.get("currentUserId"), c.get("chatAdminId"))) {
+    if (
+      !canDeleteMessage(message, c.get("currentUserId"), c.get("chatAdminId"))
+    ) {
       return c.json(
         {
           success: false,
           message: "You cannot delete this message",
         },
-        403
+        403,
       );
     }
 
@@ -335,13 +377,19 @@ export async function removeMessage(c: Context<AppEnv>) {
         {
           success: true,
           message: "Message already deleted",
-          chatMessage: await deleteChatMessage(c.get("chatId"), parsedMessageId.data),
+          chatMessage: await deleteChatMessage(
+            c.get("chatId"),
+            parsedMessageId.data,
+          ),
         },
-        200
+        200,
       );
     }
 
-    const chatMessage = await deleteChatMessage(c.get("chatId"), parsedMessageId.data);
+    const chatMessage = await deleteChatMessage(
+      c.get("chatId"),
+      parsedMessageId.data,
+    );
 
     publishChatEvent(c.get("chatId"), {
       type: "message.deleted",
@@ -354,7 +402,7 @@ export async function removeMessage(c: Context<AppEnv>) {
         message: "Message deleted successfully",
         chatMessage,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Delete message error:", error);
@@ -363,7 +411,7 @@ export async function removeMessage(c: Context<AppEnv>) {
         success: false,
         message: "Failed to delete message",
       },
-      500
+      500,
     );
   }
 }

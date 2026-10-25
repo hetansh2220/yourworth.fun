@@ -27,7 +27,7 @@ app.use(
 
 app.get("/", (c) => {
   return c.json({
-    message: "API running",
+    message: "server is running",
   });
 });
 

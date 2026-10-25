@@ -4,7 +4,6 @@ import { z } from "zod";
 
 import { db } from "../db";
 import { chatMembers, chats, users } from "../db/schema";
-import { walletHoldsToken } from "../lib/solana/token-holdings";
 import { publishChatEvent } from "../lib/chat/pubsub";
 import {
   chatFields,
@@ -294,7 +293,10 @@ export async function createGroupChat(c: Context<AppEnv>) {
     );
   } catch (error) {
     if (getErrorCode(error) === "23505") {
-      return c.json({ success: false, message: "You already have a group chat" }, 409);
+      return c.json(
+        { success: false, message: "You already have a group chat" },
+        409,
+      );
     }
     console.error("Create group chat error:", error);
     return c.json(
