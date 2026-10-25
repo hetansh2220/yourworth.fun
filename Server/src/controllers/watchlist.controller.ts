@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { createWatchlistSchema, users, watchlist } from "@/db/schema";
 import type { AppEnv } from "@/types/app";
@@ -99,6 +99,48 @@ export async function removeFromWatchlist(c: Context<AppEnv>) {
     console.error("Remove from watchlist error:", error);
     return c.json(
       { success: false, message: "Failed to remove from watchlist" },
+      500,
+    );
+  }
+}
+
+/** Returns the authenticated user's watchlist, newest additions first. */
+export async function getWatchlist(c: Context<AppEnv>) {
+  try {
+    const owner = await getOwner(c);
+    if (!owner) {
+      return c.json(
+        { success: false, message: "Authenticated profile is required" },
+        401,
+      );
+    }
+
+    const entries = await db
+      .select({
+        id: watchlist.id,
+        watchedUserId: watchlist.watchedUserId,
+        createdAt: watchlist.createdAt,
+        user: {
+          id: users.id,
+          username: users.username,
+          name: users.name,
+          avatar: users.avatar,
+          bio: users.bio,
+          verified: users.verified,
+          token: users.token,
+          poolAddress: users.poolAddress,
+        },
+      })
+      .from(watchlist)
+      .innerJoin(users, eq(watchlist.watchedUserId, users.id))
+      .where(eq(watchlist.userId, owner.id))
+      .orderBy(desc(watchlist.createdAt), desc(watchlist.id));
+
+    return c.json({ success: true, watchlist: entries }, 200);
+  } catch (error) {
+    console.error("Get watchlist error:", error);
+    return c.json(
+      { success: false, message: "Failed to retrieve watchlist" },
       500,
     );
   }

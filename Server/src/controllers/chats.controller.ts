@@ -117,8 +117,42 @@ export const chatWebSocket = upgradeWebSocket((c: Context<AppEnv>) => {
   const topic = chatTopic(chatId);
 
   return {
-    onOpen(_event, ws) {
+    async onOpen(_event, ws) {
       (ws.raw as Bun.ServerWebSocket<BunWebSocketData>).subscribe(topic);
+
+      try {
+        const rows = await db
+          .select({
+            ...getTableColumns(messages),
+            sender: {
+              id: users.id,
+              username: users.username,
+              name: users.name,
+              avatar: users.avatar,
+            },
+          })
+          .from(messages)
+          .innerJoin(users, eq(messages.senderId, users.id))
+          .where(eq(messages.chatId, chatId))
+          .orderBy(desc(messages.createdAt), desc(messages.id))
+          .limit(10);
+
+        if (ws.readyState === 1) {
+          ws.send(
+            JSON.stringify({ channel: "history", data: rows.toReversed() }),
+          );
+        }
+      } catch (error) {
+        console.error("WebSocket history error:", error);
+        if (ws.readyState === 1) {
+          ws.send(
+            JSON.stringify({
+              channel: "error",
+              message: "Failed to load message history",
+            }),
+          );
+        }
+      }
     },
     async onMessage(event, ws) {
       try {
