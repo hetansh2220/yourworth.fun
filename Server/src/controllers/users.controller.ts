@@ -4,8 +4,6 @@ import { desc, eq, lt } from "drizzle-orm";
 import { db } from "../db";
 import { createUserSchema, updateUserSchema, users } from "../db/schema";
 import type { AppEnv } from "../types/app";
-import { privy } from "../lib/privy";
-import { getSolanaEmbeddedWalletAddress } from "../middleware/authMiddleware";
 
 function getErrorCode(error: unknown) {
   return typeof error === "object" &&
@@ -35,11 +33,7 @@ export async function createUser(c: Context<AppEnv>) {
   }
 
   try {
-    const privyUserId = c.get("privyUserId");
-    const privyUser = await privy.users()._get(privyUserId);
-    const walletAddress = getSolanaEmbeddedWalletAddress(
-      privyUser.linked_accounts,
-    );
+    const walletAddress = c.get("walletAddress");
 
     if (!walletAddress) {
       return c.json(
@@ -51,13 +45,13 @@ export async function createUser(c: Context<AppEnv>) {
       );
     }
     const cleanUsername = parsedBody.data.username.trim().toLowerCase();
-    const cleanDisplayName = parsedBody.data.displayName.trim();
+    const cleanName = parsedBody.data.name.trim();
     const cleanBio = parsedBody.data.bio.trim();
 
     const [existingUser] = await db
       .select()
       .from(users)
-      .where(eq(users.privyUserId, privyUserId))
+      .where(eq(users.address, walletAddress))
       .limit(1);
 
     if (existingUser) {
@@ -90,10 +84,9 @@ export async function createUser(c: Context<AppEnv>) {
     const [newUser] = await db
       .insert(users)
       .values({
-        privyUserId,
         username: cleanUsername,
-        displayName: cleanDisplayName,
-        walletAddress,
+        name: cleanName,
+        address: walletAddress,
         avatar: parsedBody.data.avatar,
         bio: cleanBio,
       })
@@ -131,13 +124,13 @@ export async function createUser(c: Context<AppEnv>) {
 }
 
 export async function getMe(c: Context<AppEnv>) {
-  const privyUserId = c.get("privyUserId");
+  const walletAddress = c.get("walletAddress");
 
   try {
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.privyUserId, privyUserId))
+      .where(eq(users.address, walletAddress))
       .limit(1);
 
     if (!user) {
@@ -187,7 +180,7 @@ export async function getUserByToken(c: Context<AppEnv>) {
       .select({
         id: users.id,
         username: users.username,
-        displayName: users.displayName,
+        name: users.name,
         token: users.token,
         avatar: users.avatar,
         bio: users.bio,
@@ -238,9 +231,7 @@ export async function getUsers(c: Context<AppEnv>) {
   const publicUserFields = {
     id: users.id,
     username: users.username,
-    xConnected: users.xConnected,
-    xUsername: users.xUsername,
-    displayName: users.displayName,
+    name: users.name,
     avatar: users.avatar,
     bio: users.bio,
     createdAt: users.createdAt,
@@ -308,7 +299,7 @@ export async function checkUsernameAvailability(c: Context<AppEnv>) {
 }
 
 export async function updateUser(c: Context<AppEnv>) {
-  const privyUserId = c.get("privyUserId");
+  const walletAddress = c.get("walletAddress");
   const body = await c.req.json().catch(() => null);
   const parsedBody = updateUserSchema.safeParse(body);
 
@@ -323,14 +314,14 @@ export async function updateUser(c: Context<AppEnv>) {
   }
 
   const cleanUsername = parsedBody.data.username?.trim().toLowerCase();
-  const cleanDisplayName = parsedBody.data.displayName?.trim();
+  const cleanName = parsedBody.data.name?.trim();
   const updateValues: Partial<typeof users.$inferInsert> = {};
 
   if (cleanUsername) {
     updateValues.username = cleanUsername;
   }
 
-  if (cleanDisplayName) updateValues.displayName = cleanDisplayName;
+  if (cleanName) updateValues.name = cleanName;
 
   if (parsedBody.data.avatar) {
     updateValues.avatar = parsedBody.data.avatar;
@@ -354,7 +345,7 @@ export async function updateUser(c: Context<AppEnv>) {
     const [existingUser] = await db
       .select()
       .from(users)
-      .where(eq(users.privyUserId, privyUserId))
+      .where(eq(users.address, walletAddress))
       .limit(1);
 
     if (!existingUser) {
@@ -374,7 +365,7 @@ export async function updateUser(c: Context<AppEnv>) {
         .where(eq(users.username, cleanUsername))
         .limit(1);
 
-      if (usernameTaken && usernameTaken.privyUserId !== privyUserId) {
+      if (usernameTaken && usernameTaken.address !== walletAddress) {
         return c.json(
           {
             success: false,
@@ -387,8 +378,8 @@ export async function updateUser(c: Context<AppEnv>) {
 
     const [updatedUser] = await db
       .update(users)
-      .set(updateValues)
-      .where(eq(users.privyUserId, privyUserId))
+      .set({ ...updateValues, updatedAt: new Date() })
+      .where(eq(users.address, walletAddress))
       .returning();
 
     return c.json(

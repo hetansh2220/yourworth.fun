@@ -59,13 +59,16 @@ async function createPrivateGroupChat(creatorId: string) {
   const newChat = await db.transaction(async (tx) => {
     const [createdChat] = await tx
       .insert(chats)
-      .values({ type: "GROUP", admin: creatorId, creatorId })
-      .onConflictDoNothing({ target: [chats.creatorId, chats.type] })
+      .values({ type: "GROUP", admin: creatorId })
+      .onConflictDoNothing()
       .returning({ id: chats.id });
 
     if (!createdChat) return null;
 
-    await tx.insert(chatMembers).values({ chatId: createdChat.id, userId: creatorId }).onConflictDoNothing();
+    await tx
+      .insert(chatMembers)
+      .values({ chatId: createdChat.id, userId: creatorId })
+      .onConflictDoNothing();
     return createdChat;
   });
 
@@ -84,7 +87,7 @@ async function createPrivateGroupChat(creatorId: string) {
 
 export async function ensurePrivateGroupForCreator(creatorId: string) {
   const groupMarket = await getGroupMarketByCreatorId(creatorId);
-  if (!groupMarket || groupMarket.paymentType !== "token") return null;
+  if (!groupMarket || groupMarket.paymentType !== "CREATOR_TOKEN") return null;
   return getOrCreatePrivateGroupChatId(creatorId);
 }
 
@@ -108,12 +111,12 @@ export async function createDmChat(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
   try {
-    const currentUser = await getCurrentUser(c.get("privyUserId"));
+    const currentUser = await getCurrentUser(c.get("walletAddress"));
 
     if (!currentUser) {
       return c.json(
@@ -121,7 +124,7 @@ export async function createDmChat(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
@@ -135,7 +138,7 @@ export async function createDmChat(c: Context<AppEnv>) {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -145,11 +148,14 @@ export async function createDmChat(c: Context<AppEnv>) {
           success: false,
           message: "You cannot create a DM with yourself",
         },
-        400
+        400,
       );
     }
 
-    const existingChatId = await getExistingDmChatId(currentUser.id, targetUser.id);
+    const existingChatId = await getExistingDmChatId(
+      currentUser.id,
+      targetUser.id,
+    );
 
     if (existingChatId) {
       const chat = await getChatWithMembers(existingChatId);
@@ -160,7 +166,7 @@ export async function createDmChat(c: Context<AppEnv>) {
           message: "DM chat already exists",
           chat,
         },
-        200
+        200,
       );
     }
 
@@ -188,7 +194,7 @@ export async function createDmChat(c: Context<AppEnv>) {
         message: "DM chat created successfully",
         chat,
       },
-      201
+      201,
     );
   } catch (error) {
     console.error("Create DM chat error:", error);
@@ -197,7 +203,7 @@ export async function createDmChat(c: Context<AppEnv>) {
         success: false,
         message: "Failed to create DM chat",
       },
-      500
+      500,
     );
   }
 }
@@ -212,12 +218,12 @@ export async function createGroupChat(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
   try {
-    const currentUser = await getCurrentUser(c.get("privyUserId"));
+    const currentUser = await getCurrentUser(c.get("walletAddress"));
 
     if (!currentUser) {
       return c.json(
@@ -225,12 +231,12 @@ export async function createGroupChat(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
     const memberIds = Array.from(
-      new Set(parsedBody.data.memberIds.filter((id) => id !== currentUser.id))
+      new Set(parsedBody.data.memberIds.filter((id) => id !== currentUser.id)),
     );
 
     if (memberIds.length === 0) {
@@ -239,7 +245,7 @@ export async function createGroupChat(c: Context<AppEnv>) {
           success: false,
           message: "Group requires at least one other member",
         },
-        400
+        400,
       );
     }
 
@@ -254,7 +260,7 @@ export async function createGroupChat(c: Context<AppEnv>) {
           success: false,
           message: "One or more members were not found",
         },
-        404
+        404,
       );
     }
 
@@ -266,10 +272,12 @@ export async function createGroupChat(c: Context<AppEnv>) {
 
       if (!createdChat) throw new Error("Failed to create chat");
 
-      await tx.insert(chatMembers).values([
-        { chatId: createdChat.id, userId: currentUser.id },
-        ...memberIds.map((userId) => ({ chatId: createdChat.id, userId })),
-      ]);
+      await tx
+        .insert(chatMembers)
+        .values([
+          { chatId: createdChat.id, userId: currentUser.id },
+          ...memberIds.map((userId) => ({ chatId: createdChat.id, userId })),
+        ]);
 
       return createdChat;
     });
@@ -282,23 +290,26 @@ export async function createGroupChat(c: Context<AppEnv>) {
         message: "Group chat created successfully",
         chat,
       },
-      201
+      201,
     );
   } catch (error) {
+    if (getErrorCode(error) === "23505") {
+      return c.json({ success: false, message: "You already have a group chat" }, 409);
+    }
     console.error("Create group chat error:", error);
     return c.json(
       {
         success: false,
         message: "Failed to create group chat",
       },
-      500
+      500,
     );
   }
 }
 
 export async function getOrCreateMyPrivateGroup(c: Context<AppEnv>) {
   try {
-    const currentUser = await getCurrentUser(c.get("privyUserId"));
+    const currentUser = await getCurrentUser(c.get("walletAddress"));
 
     if (!currentUser) {
       return c.json(
@@ -306,7 +317,7 @@ export async function getOrCreateMyPrivateGroup(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
@@ -318,17 +329,17 @@ export async function getOrCreateMyPrivateGroup(c: Context<AppEnv>) {
           success: false,
           message: "Create your group market first",
         },
-        404
+        404,
       );
     }
 
-    if (groupMarket.paymentType !== "token") {
+    if (groupMarket.paymentType !== "CREATOR_TOKEN") {
       return c.json(
         {
           success: false,
           message: "Private groups require creator token access",
         },
-        400
+        400,
       );
     }
 
@@ -338,12 +349,16 @@ export async function getOrCreateMyPrivateGroup(c: Context<AppEnv>) {
           success: false,
           message: "Launch your creator token first",
         },
-        400
+        400,
       );
     }
 
     const chatId = await ensurePrivateGroupForCreator(currentUser.id);
-    if (!chatId) return c.json({ success: false, message: "Private group is not configured" }, 404);
+    if (!chatId)
+      return c.json(
+        { success: false, message: "Private group is not configured" },
+        404,
+      );
     const chat = await getChatWithMembers(chatId);
 
     return c.json(
@@ -352,7 +367,7 @@ export async function getOrCreateMyPrivateGroup(c: Context<AppEnv>) {
         message: "Private group ready",
         chat,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get or create private group error:", error);
@@ -361,7 +376,7 @@ export async function getOrCreateMyPrivateGroup(c: Context<AppEnv>) {
         success: false,
         message: "Failed to prepare private group",
       },
-      500
+      500,
     );
   }
 }
@@ -376,12 +391,12 @@ export async function joinPrivateGroup(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
   try {
-    const currentUser = await getCurrentUser(c.get("privyUserId"));
+    const currentUser = await getCurrentUser(c.get("walletAddress"));
 
     if (!currentUser) {
       return c.json(
@@ -389,7 +404,7 @@ export async function joinPrivateGroup(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
@@ -403,19 +418,19 @@ export async function joinPrivateGroup(c: Context<AppEnv>) {
           success: false,
           message: "Creator not found",
         },
-        404
+        404,
       );
     }
 
     const groupMarket = await getGroupMarketByCreatorId(creator.id);
 
-    if (!groupMarket || groupMarket.paymentType !== "token") {
+    if (!groupMarket || groupMarket.paymentType !== "CREATOR_TOKEN") {
       return c.json(
         {
           success: false,
           message: "Creator private group is not available",
         },
-        404
+        404,
       );
     }
 
@@ -425,16 +440,16 @@ export async function joinPrivateGroup(c: Context<AppEnv>) {
           success: false,
           message: "Creator token is not launched",
         },
-        400
+        400,
       );
     }
 
     const hasAccess =
       currentUser.id === creator.id ||
-      await walletHoldsToken({
-        walletAddress: currentUser.walletAddress,
+      (await walletHoldsToken({
+        walletAddress: currentUser.address,
         mintAddress: creator.token,
-      });
+      }));
 
     if (!hasAccess) {
       return c.json(
@@ -442,7 +457,7 @@ export async function joinPrivateGroup(c: Context<AppEnv>) {
           success: false,
           message: "Creator token required to join this group",
         },
-        403
+        403,
       );
     }
 
@@ -469,7 +484,7 @@ export async function joinPrivateGroup(c: Context<AppEnv>) {
         message: "Private group joined",
         chat,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Join private group error:", error);
@@ -478,14 +493,14 @@ export async function joinPrivateGroup(c: Context<AppEnv>) {
         success: false,
         message: "Failed to join private group",
       },
-      500
+      500,
     );
   }
 }
 
 export async function getMyChats(c: Context<AppEnv>) {
   try {
-    const currentUser = await getCurrentUser(c.get("privyUserId"));
+    const currentUser = await getCurrentUser(c.get("walletAddress"));
 
     if (!currentUser) {
       return c.json(
@@ -493,7 +508,7 @@ export async function getMyChats(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
@@ -518,30 +533,66 @@ export async function getMyChats(c: Context<AppEnv>) {
     const ownsToken = (token: string) => {
       const existing = tokenOwnership.get(token);
       if (existing) return existing;
-      const check = walletHoldsToken({ walletAddress: currentUser.walletAddress, mintAddress: token });
+      const check = walletHoldsToken({
+        walletAddress: currentUser.address,
+        mintAddress: token,
+      });
       tokenOwnership.set(token, check);
       return check;
     };
 
-    const creatorIds = Array.from(new Set(chatRows
-      .filter((chat) => chat.type === "GROUP" && chat.creatorId && chat.creatorId !== currentUser.id)
-      .map((chat) => chat.creatorId as string)));
-    const creatorRows = creatorIds.length > 0
-      ? await db.select({ id: users.id, token: users.token }).from(users).where(inArray(users.id, creatorIds))
-      : [];
-    const creatorTokens = new Map(creatorRows.map((creator) => [creator.id, creator.token]));
+    const creatorIds = Array.from(
+      new Set(
+        chatRows
+          .filter(
+            (chat) =>
+              chat.type === "GROUP" &&
+              chat.admin &&
+              chat.admin !== currentUser.id,
+          )
+          .map((chat) => chat.admin as string),
+      ),
+    );
+    const creatorRows =
+      creatorIds.length > 0
+        ? await db
+            .select({ id: users.id, token: users.token })
+            .from(users)
+            .where(inArray(users.id, creatorIds))
+        : [];
+    const creatorTokens = new Map(
+      creatorRows.map((creator) => [creator.id, creator.token]),
+    );
 
-    const expiredGroupIds = (await Promise.all(chatRows.map(async (chat) => {
-      if (chat.type !== "GROUP" || !chat.creatorId || chat.creatorId === currentUser.id) return null;
-      const token = creatorTokens.get(chat.creatorId);
-      const hasToken = Boolean(token) && await ownsToken(token ?? "");
-      return hasToken ? null : chat.id;
-    }))).filter((chatId): chatId is string => Boolean(chatId));
+    const expiredGroupIds = (
+      await Promise.all(
+        chatRows.map(async (chat) => {
+          if (
+            chat.type !== "GROUP" ||
+            !chat.admin ||
+            chat.admin === currentUser.id
+          )
+            return null;
+          const token = creatorTokens.get(chat.admin);
+          const hasToken = Boolean(token) && (await ownsToken(token ?? ""));
+          return hasToken ? null : chat.id;
+        }),
+      )
+    ).filter((chatId): chatId is string => Boolean(chatId));
 
     if (expiredGroupIds.length > 0) {
-      await db.delete(chatMembers).where(and(eq(chatMembers.userId, currentUser.id), inArray(chatMembers.chatId, expiredGroupIds)));
+      await db
+        .delete(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.userId, currentUser.id),
+            inArray(chatMembers.chatId, expiredGroupIds),
+          ),
+        );
     }
-    const activeChatRows = chatRows.filter((chat) => !expiredGroupIds.includes(chat.id));
+    const activeChatRows = chatRows.filter(
+      (chat) => !expiredGroupIds.includes(chat.id),
+    );
 
     const chatIds = activeChatRows.map((chat) => chat.id);
     const membersByChatId = await getChatMembersMap(chatIds);
@@ -557,7 +608,7 @@ export async function getMyChats(c: Context<AppEnv>) {
           members: membersByChatId.get(chat.id) ?? [],
         })),
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get my chats error:", error);
@@ -566,7 +617,7 @@ export async function getMyChats(c: Context<AppEnv>) {
         success: false,
         message: "Failed to retrieve chats",
       },
-      500
+      500,
     );
   }
 }
@@ -581,7 +632,7 @@ export async function getChatById(c: Context<AppEnv>) {
           success: false,
           message: "Chat not found",
         },
-        404
+        404,
       );
     }
 
@@ -590,7 +641,7 @@ export async function getChatById(c: Context<AppEnv>) {
         success: true,
         chat,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get chat error:", error);
@@ -599,7 +650,7 @@ export async function getChatById(c: Context<AppEnv>) {
         success: false,
         message: "Failed to retrieve chat",
       },
-      500
+      500,
     );
   }
 }
@@ -614,7 +665,7 @@ export async function addGroupMember(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
@@ -627,14 +678,14 @@ export async function addGroupMember(c: Context<AppEnv>) {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
     const chat = await getChatWithMembers(c.get("chatId"));
 
-    if (chat?.creatorId) {
-      const creator = await getUserById(chat.creatorId);
+    if (chat?.admin) {
+      const creator = await getUserById(chat.admin);
 
       if (!creator?.token) {
         return c.json(
@@ -642,16 +693,16 @@ export async function addGroupMember(c: Context<AppEnv>) {
             success: false,
             message: "Creator token is not launched",
           },
-          400
+          400,
         );
       }
 
       const hasAccess =
-        member.id === chat.creatorId ||
-        await walletHoldsToken({
-          walletAddress: member.walletAddress,
+        member.id === chat.admin ||
+        (await walletHoldsToken({
+          walletAddress: member.address,
           mintAddress: creator.token,
-        });
+        }));
 
       if (!hasAccess) {
         return c.json(
@@ -659,7 +710,7 @@ export async function addGroupMember(c: Context<AppEnv>) {
             success: false,
             message: "Creator token required to join this group",
           },
-          403
+          403,
         );
       }
     }
@@ -682,7 +733,7 @@ export async function addGroupMember(c: Context<AppEnv>) {
         message: "Group member added successfully",
         chat: updatedChat,
       },
-      201
+      201,
     );
   } catch (error) {
     console.error("Add group member error:", error);
@@ -693,7 +744,7 @@ export async function addGroupMember(c: Context<AppEnv>) {
           success: false,
           message: "Member already exists",
         },
-        409
+        409,
       );
     }
 
@@ -702,7 +753,7 @@ export async function addGroupMember(c: Context<AppEnv>) {
         success: false,
         message: "Failed to add group member",
       },
-      500
+      500,
     );
   }
 }
@@ -716,7 +767,7 @@ export async function removeGroupMember(c: Context<AppEnv>) {
         success: false,
         message: "User id is invalid",
       },
-      400
+      400,
     );
   }
 
@@ -726,7 +777,7 @@ export async function removeGroupMember(c: Context<AppEnv>) {
         success: false,
         message: "Group admin cannot be removed",
       },
-      400
+      400,
     );
   }
 
@@ -736,8 +787,8 @@ export async function removeGroupMember(c: Context<AppEnv>) {
       .where(
         and(
           eq(chatMembers.chatId, c.get("chatId")),
-          eq(chatMembers.userId, parsedUserId.data)
-        )
+          eq(chatMembers.userId, parsedUserId.data),
+        ),
       )
       .returning({ id: chatMembers.id });
 
@@ -747,7 +798,7 @@ export async function removeGroupMember(c: Context<AppEnv>) {
           success: false,
           message: "Member not found",
         },
-        404
+        404,
       );
     }
 
@@ -761,7 +812,7 @@ export async function removeGroupMember(c: Context<AppEnv>) {
         success: true,
         message: "Group member removed successfully",
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Remove group member error:", error);
@@ -770,7 +821,7 @@ export async function removeGroupMember(c: Context<AppEnv>) {
         success: false,
         message: "Failed to remove group member",
       },
-      500
+      500,
     );
   }
 }
@@ -784,8 +835,8 @@ export async function markChatRead(c: Context<AppEnv>) {
       .where(
         and(
           eq(chatMembers.chatId, c.get("chatId")),
-          eq(chatMembers.userId, c.get("currentUserId"))
-        )
+          eq(chatMembers.userId, c.get("currentUserId")),
+        ),
       )
       .returning({ id: chatMembers.id, lastReadAt: chatMembers.lastReadAt });
 
@@ -795,7 +846,7 @@ export async function markChatRead(c: Context<AppEnv>) {
           success: false,
           message: "Chat not found",
         },
-        404
+        404,
       );
     }
 
@@ -812,7 +863,7 @@ export async function markChatRead(c: Context<AppEnv>) {
         message: "Chat marked as read",
         lastReadAt: membership.lastReadAt,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Mark chat read error:", error);
@@ -821,7 +872,7 @@ export async function markChatRead(c: Context<AppEnv>) {
         success: false,
         message: "Failed to mark chat as read",
       },
-      500
+      500,
     );
   }
 }

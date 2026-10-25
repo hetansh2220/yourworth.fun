@@ -7,7 +7,7 @@ import { walletHoldsToken } from "../solana/token-holdings";
 export const userFields = {
   id: users.id,
   username: users.username,
-  displayName: users.displayName,
+  name: users.name,
   avatar: users.avatar,
   bio: users.bio,
 };
@@ -16,7 +16,6 @@ export const chatFields = {
   id: chats.id,
   type: chats.type,
   admin: chats.admin,
-  creatorId: chats.creatorId,
   createdAt: chats.createdAt,
   updatedAt: chats.updatedAt,
 };
@@ -25,7 +24,7 @@ export type ChatMember = {
   user: {
     id: string;
     username: string;
-    displayName: string;
+    name: string;
     avatar: string;
     bio: string;
   };
@@ -54,11 +53,11 @@ async function withNetworkRetry<T>(operation: () => Promise<T>, attempts = 2) {
   throw lastError;
 }
 
-export async function getCurrentUser(privyUserId: string) {
+export async function getCurrentUser(walletAddress: string) {
   const [user] = await withNetworkRetry(() => db
     .select()
     .from(users)
-    .where(eq(users.privyUserId, privyUserId))
+    .where(eq(users.address, walletAddress))
     .limit(1));
 
   return user;
@@ -141,7 +140,6 @@ export async function getChatAccess(chatId: string, userId: string) {
       chatId: chats.id,
       chatType: chats.type,
       chatAdminId: chats.admin,
-      creatorId: chats.creatorId,
     })
     .from(chatMembers)
     .innerJoin(chats, eq(chatMembers.chatId, chats.id))
@@ -154,9 +152,9 @@ export async function getChatAccess(chatId: string, userId: string) {
 export async function hasChatAccess(chatId: string, userId: string, walletAddress: string) {
   const access = await getChatAccess(chatId, userId);
   if (!access) return null;
-  if (access.chatType !== "GROUP" || !access.creatorId || access.creatorId === userId) return access;
+  if (access.chatType !== "GROUP" || !access.chatAdminId || access.chatAdminId === userId) return access;
 
-  const [creator] = await db.select({ token: users.token }).from(users).where(eq(users.id, access.creatorId)).limit(1);
+  const [creator] = await db.select({ token: users.token }).from(users).where(eq(users.id, access.chatAdminId)).limit(1);
   const hasToken = creator?.token
     ? await walletHoldsToken({ walletAddress, mintAddress: creator.token })
     : false;
@@ -167,7 +165,7 @@ export async function getGroupMarketByCreatorId(creatorId: string) {
   const [market] = await db
     .select({ id: markets.id, paymentType: markets.paymentType })
     .from(markets)
-    .where(and(eq(markets.userId, creatorId), eq(markets.marketType, "group")))
+    .where(and(eq(markets.userId, creatorId), eq(markets.marketType, "GROUP")))
     .limit(1);
 
   return market;
@@ -177,7 +175,7 @@ export async function getPrivateGroupChatId(creatorId: string) {
   const [chat] = await db
     .select({ id: chats.id })
     .from(chats)
-    .where(and(eq(chats.type, "GROUP"), eq(chats.creatorId, creatorId)))
+    .where(and(eq(chats.type, "GROUP"), eq(chats.admin, creatorId)))
     .limit(1);
 
   return chat?.id ?? null;

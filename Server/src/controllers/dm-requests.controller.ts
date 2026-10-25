@@ -18,13 +18,13 @@ import type { AppEnv } from "../types/app";
 
 const requestIdParamSchema = z.string().uuid();
 
-async function getCurrentUser(privyUserId: string) {
+async function getCurrentUser(walletAddress: string) {
   const [user] = await db
     .select({
       id: users.id,
     })
     .from(users)
-    .where(eq(users.privyUserId, privyUserId))
+    .where(eq(users.address, walletAddress))
     .limit(1);
 
   return user;
@@ -103,7 +103,7 @@ export async function createDmRequestRecord(c: Context<AppEnv>) {
   }
 
   try {
-    const currentUser = await getCurrentUser(c.get("privyUserId"));
+    const currentUser = await getCurrentUser(c.get("walletAddress"));
 
     if (!currentUser) {
       return c.json(
@@ -198,7 +198,7 @@ export async function createDmRequestRecord(c: Context<AppEnv>) {
 
 export async function getMyDmRequests(c: Context<AppEnv>) {
   try {
-    const currentUser = await getCurrentUser(c.get("privyUserId"));
+    const currentUser = await getCurrentUser(c.get("walletAddress"));
 
     if (!currentUser) {
       return c.json(
@@ -267,7 +267,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
   }
 
   try {
-    const currentUser = await getCurrentUser(c.get("privyUserId"));
+    const currentUser = await getCurrentUser(c.get("walletAddress"));
 
     if (!currentUser) {
       return c.json(
@@ -295,7 +295,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
       );
     }
 
-    if (existingRequest.status !== "pending") {
+    if (existingRequest.status !== "PENDING") {
       return c.json(
         {
           success: false,
@@ -306,12 +306,12 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
     }
 
     const isCreatorAction =
-      parsedBody.data.status === "completed" &&
+      parsedBody.data.status === "COMPLETED" &&
       existingRequest.creatorId === currentUser.id;
     const isUserAction =
-      (parsedBody.data.status === "refunded" ||
-        parsedBody.data.status === "failed" ||
-        parsedBody.data.status === "expired") &&
+      (parsedBody.data.status === "REFUNDED" ||
+        parsedBody.data.status === "FAILED" ||
+        parsedBody.data.status === "EXPIRED") &&
       existingRequest.userId === currentUser.id;
 
     if (!isCreatorAction && !isUserAction) {
@@ -327,7 +327,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
     const now = new Date();
 
     if (
-      parsedBody.data.status === "completed" &&
+      parsedBody.data.status === "COMPLETED" &&
       now > existingRequest.expiresAt
     ) {
       return c.json(
@@ -340,8 +340,8 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
     }
 
     if (
-      (parsedBody.data.status === "refunded" ||
-        parsedBody.data.status === "expired") &&
+      (parsedBody.data.status === "REFUNDED" ||
+        parsedBody.data.status === "EXPIRED") &&
       now < existingRequest.expiresAt
     ) {
       return c.json(
@@ -354,14 +354,14 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
     }
 
     const updateValues =
-      parsedBody.data.status === "completed"
+      parsedBody.data.status === "COMPLETED"
         ? {
             status: parsedBody.data.status,
             completeTxSignature: parsedBody.data.completeTxSignature,
             completedAt: now,
             updatedAt: now,
           }
-        : parsedBody.data.status === "refunded"
+        : parsedBody.data.status === "REFUNDED"
           ? {
               status: parsedBody.data.status,
               refundTxSignature: parsedBody.data.refundTxSignature,
@@ -384,7 +384,7 @@ export async function updateDmRequestStatus(c: Context<AppEnv>) {
     }
 
     publishChatEvent(existingRequest.chatId, {
-      type: `dm_request.${dmRequest.status}`,
+      type: `dm_request.${dmRequest.status.toLowerCase()}`,
       dmRequest,
     });
 

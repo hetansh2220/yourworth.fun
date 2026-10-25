@@ -209,7 +209,7 @@ export async function prepareCreatorTokenSwap(c: Context<AppEnv>) {
   if (!parsed.success) return c.json({ success: false, message: "Invalid swap request" }, 400);
   try {
     const [creator] = await db.select().from(users).where(eq(users.username, parsed.data.creatorUsername)).limit(1);
-    const currentUser = await getCurrentUser(c.get("privyUserId"));
+    const currentUser = await getCurrentUser(c.get("walletAddress"));
     const walletAddress = c.get("walletAddress");
     if (!currentUser) return c.json({ success: false, message: "Create your user profile first" }, 404);
     if (!walletAddress) return c.json({ success: false, message: "Your Solana wallet is not ready" }, 400);
@@ -301,12 +301,12 @@ export async function prepareMyCreatorToken(c: Context<AppEnv>) {
   }
 
   try {
-    const user = await getCurrentUser(c.get("privyUserId"));
+    const user = await getCurrentUser(c.get("walletAddress"));
     if (!user) return c.json({ success: false, message: "Create your user profile first" }, 404);
     if (user.token) return c.json({ success: true, message: "Creator token already launched", token: user.token }, 200);
 
-    const name = getDefaultTokenName(user.displayName, user.username);
-    const symbol = getDefaultSymbol(user.displayName, user.username);
+    const name = getDefaultTokenName(user.name, user.username);
+    const symbol = getDefaultSymbol(user.name, user.username);
     const description = parsedBody.data.description ?? (user.bio || `${user.username} creator token on Worth`);
     const launch = await prepareCreatorTokenLaunch({
       name,
@@ -314,7 +314,7 @@ export async function prepareMyCreatorToken(c: Context<AppEnv>) {
       description,
       imageUrl: parsedBody.data.imageUrl ?? user.avatar,
       metadataUri: parsedBody.data.metadataUri,
-      payer: new PublicKey(user.walletAddress),
+      payer: new PublicKey(user.address),
     });
 
     return c.json({ success: true, launch }, 200);
@@ -329,7 +329,7 @@ export async function confirmMyCreatorToken(c: Context<AppEnv>) {
   if (!parsedBody.success) return c.json({ success: false, message: "Invalid confirmation payload" }, 400);
 
   try {
-    const user = await getCurrentUser(c.get("privyUserId"));
+    const user = await getCurrentUser(c.get("walletAddress"));
     if (!user) return c.json({ success: false, message: "Create your user profile first" }, 404);
     if (user.token) return c.json({ success: true, token: user.token }, 200);
 
@@ -359,32 +359,32 @@ export async function confirmMyCreatorToken(c: Context<AppEnv>) {
   }
 }
 
-function getDefaultSymbol(displayName: string, username: string) {
-  const firstName = displayName.trim().split(/\s+/)[0] || username;
+function getDefaultSymbol(name: string, username: string) {
+  const firstName = name.trim().split(/\s+/)[0] || username;
   const clean = firstName.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
   return (clean || "WORTH").slice(0, 10);
 }
 
-function getDefaultTokenName(displayName: string, username: string) {
-  const firstName = displayName.trim().split(/\s+/)[0] || username;
+function getDefaultTokenName(name: string, username: string) {
+  const firstName = name.trim().split(/\s+/)[0] || username;
   return `${firstName || "Creator"}'s time`;
 }
 
-async function getCurrentUser(privyUserId: string) {
+async function getCurrentUser(walletAddress: string) {
   const [user] = await db
     .select()
     .from(users)
-    .where(eq(users.privyUserId, privyUserId))
+    .where(eq(users.address, walletAddress))
     .limit(1);
 
   return user;
 }
 
 export async function getMyCreatorToken(c: Context<AppEnv>) {
-  const privyUserId = c.get("privyUserId");
+  const walletAddress = c.get("walletAddress");
 
   try {
-    const user = await getCurrentUser(privyUserId);
+    const user = await getCurrentUser(walletAddress);
 
     if (!user) {
       return c.json(
@@ -417,7 +417,7 @@ export async function getMyCreatorToken(c: Context<AppEnv>) {
 }
 
 export async function launchMyCreatorToken(c: Context<AppEnv>) {
-  const privyUserId = c.get("privyUserId");
+  const walletAddress = c.get("walletAddress");
   const body = await c.req.json().catch(() => ({}));
   const parsedBody = creatorTokenLaunchSchema.safeParse(body);
 
@@ -433,7 +433,7 @@ export async function launchMyCreatorToken(c: Context<AppEnv>) {
   }
 
   try {
-    const user = await getCurrentUser(privyUserId);
+    const user = await getCurrentUser(walletAddress);
 
     if (!user) {
       return c.json(
@@ -475,8 +475,8 @@ export async function launchMyCreatorToken(c: Context<AppEnv>) {
       });
     }
 
-    const name = getDefaultTokenName(user.displayName, user.username);
-    const symbol = getDefaultSymbol(user.displayName, user.username);
+    const name = getDefaultTokenName(user.name, user.username);
+    const symbol = getDefaultSymbol(user.name, user.username);
     const description =
       parsedBody.data.description ??
       (user.bio || `${user.username} creator token on Worth`);
@@ -589,7 +589,7 @@ export async function settleCreatorTradingFees(c: Context<AppEnv>) {
 
     const result = await settleTradingFeesDevnet({
       poolAddress: resolvedPool.address.toBase58(),
-      creatorWallet: creator.walletAddress,
+      creatorWallet: creator.address,
     });
 
     return c.json({ success: true, graduated: true, ...result }, 200);

@@ -46,8 +46,8 @@ const adminSignSchema = z.object({
   expiresAt: z.coerce.date(),
 });
 
-async function currentUser(privyUserId: string) {
-  const [user] = await db.select().from(users).where(eq(users.privyUserId, privyUserId)).limit(1);
+async function currentUser(walletAddress: string) {
+  const [user] = await db.select().from(users).where(eq(users.address, walletAddress)).limit(1);
   return user;
 }
 
@@ -66,7 +66,7 @@ async function getDmContext(chatId: string, buyerId: string, creatorId: string) 
 
 async function getDmMarket(creatorId: string) {
   const [market] = await db.select().from(markets)
-    .where(and(eq(markets.userId, creatorId), eq(markets.marketType, "dm")))
+    .where(and(eq(markets.userId, creatorId), eq(markets.marketType, "DM")))
     .limit(1);
   return market;
 }
@@ -76,7 +76,7 @@ export async function prepareDmPayment(c: Context<AppEnv>) {
   if (!parsed.success) return c.json({ success: false, message: parsed.error.issues[0]?.message ?? "Invalid DM payment" }, 400);
 
   try {
-    const buyer = await currentUser(c.get("privyUserId"));
+    const buyer = await currentUser(c.get("walletAddress"));
     if (!buyer) return c.json({ success: false, message: "Create your user profile first" }, 404);
     const creator = await db.select().from(users).where(eq(users.id, parsed.data.creatorId)).limit(1).then((rows) => rows[0]);
     if (!creator) return c.json({ success: false, message: "Creator not found" }, 404);
@@ -84,14 +84,15 @@ export async function prepareDmPayment(c: Context<AppEnv>) {
     if (!(await getDmContext(parsed.data.chatId, buyer.id, creator.id))) return c.json({ success: false, message: "DM chat not found" }, 404);
 
     const market = await getDmMarket(creator.id);
-    if (!market || market.accessRule !== "fixed" || !market.priceAmount || Number(market.priceAmount) <= 0) {
+    if (!market || !market.amount || Number(market.amount) <= 0) {
       return c.json({ success: false, message: "Creator DM pricing is not configured" }, 400);
     }
+    if (market.paymentType !== "CREATOR_TOKEN") return c.json({ success: false, message: "USDC DM escrow is not supported yet" }, 400);
     // Paid DMs use the creator token. Keep this server-side rule independent
     // of stale market rows that were created before DM pricing became token-only.
     const paymentMint = creator.token;
     if (!paymentMint) return c.json({ success: false, message: "Creator token is not launched" }, 400);
-    if (c.get("walletAddress") !== buyer.walletAddress) {
+    if (c.get("walletAddress") !== buyer.address) {
       return c.json({ success: false, message: "Active wallet does not match your profile wallet" }, 409);
     }
     const buyerBalance = await getDmConnection().getBalance(new PublicKey(c.get("walletAddress")), "confirmed");
@@ -107,13 +108,13 @@ export async function prepareDmPayment(c: Context<AppEnv>) {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const prepared = await prepareDmOrder({
       buyer: new PublicKey(c.get("walletAddress")),
-      creator: new PublicKey(creator.walletAddress),
+      creator: new PublicKey(creator.address),
       mint: new PublicKey(paymentMint),
-      amount: market.priceAmount,
+      amount: market.amount,
       expiresAt,
     });
 
-    return c.json({ success: true, marketType: "dm", paymentType: "token", content: parsed.data.content, creatorId: creator.id, ...prepared }, 200);
+    return c.json({ success: true, marketType: "DM", paymentType: "CREATOR_TOKEN", content: parsed.data.content, creatorId: creator.id, ...prepared }, 200);
   } catch (error) {
     console.error("Prepare DM payment error:", error);
     return c.json({ success: false, message: error instanceof Error ? error.message : "Failed to prepare DM payment" }, 500);
@@ -124,17 +125,17 @@ export async function adminSignDmPayment(c: Context<AppEnv>) {
   const parsed = adminSignSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ success: false, message: "Invalid DM escrow transaction" }, 400);
   try {
-    const buyer = await currentUser(c.get("privyUserId"));
+    const buyer = await currentUser(c.get("walletAddress"));
     const creator = await db.select().from(users).where(eq(users.id, parsed.data.creatorId)).limit(1).then((rows) => rows[0]);
     if (!buyer || !creator || !(await getDmContext(parsed.data.chatId, buyer.id, creator.id))) return c.json({ success: false, message: "DM chat not found" }, 404);
-    if (c.get("walletAddress") !== buyer.walletAddress) return c.json({ success: false, message: "Active wallet does not match the buyer wallet" }, 409);
+    if (c.get("walletAddress") !== buyer.address) return c.json({ success: false, message: "Active wallet does not match the buyer wallet" }, 409);
     if (parsed.data.paymentMint !== creator.token) return c.json({ success: false, message: "Payment mint does not match the creator token" }, 400);
     if (deriveDmOrderAddresses(parsed.data.orderId).order.toBase58() !== parsed.data.requestPda) return c.json({ success: false, message: "Order PDA does not match the order id" }, 400);
     const signedTransaction = await signDmOrderTransaction({
       unsignedTransaction: parsed.data.unsignedTransaction,
       orderId: parsed.data.orderId,
-      buyer: new PublicKey(buyer.walletAddress),
-      creator: new PublicKey(creator.walletAddress),
+      buyer: new PublicKey(buyer.address),
+      creator: new PublicKey(creator.address),
       mint: new PublicKey(parsed.data.paymentMint),
       amount: parsed.data.amount,
       expiresAt: parsed.data.expiresAt,
@@ -151,11 +152,11 @@ export async function submitDmPayment(c: Context<AppEnv>) {
   if (!parsed.success) return c.json({ success: false, message: parsed.error.issues[0]?.message ?? "Invalid DM payment" }, 400);
 
   try {
-    const buyer = await currentUser(c.get("privyUserId"));
+    const buyer = await currentUser(c.get("walletAddress"));
     if (!buyer) return c.json({ success: false, message: "Create your user profile first" }, 404);
     const creator = await db.select().from(users).where(eq(users.id, parsed.data.creatorId)).limit(1).then((rows) => rows[0]);
     if (!creator || !(await getDmContext(parsed.data.chatId, buyer.id, creator.id))) return c.json({ success: false, message: "DM chat not found" }, 404);
-    if (c.get("walletAddress") !== buyer.walletAddress) return c.json({ success: false, message: "Active wallet does not match your profile wallet" }, 409);
+    if (c.get("walletAddress") !== buyer.address) return c.json({ success: false, message: "Active wallet does not match your profile wallet" }, 409);
 
     const connection = getDmConnection();
     let signature = parsed.data.signature ?? "";
@@ -176,8 +177,8 @@ export async function submitDmPayment(c: Context<AppEnv>) {
       if (feePayer !== c.get("walletAddress")) return c.json({ success: false, message: "The escrow transaction fee payer does not match the buyer wallet" }, 400);
     }
     const validOrder = await confirmDmOrder(parsed.data.requestPda, {
-      buyer: buyer.walletAddress,
-      creator: creator.walletAddress,
+      buyer: buyer.address,
+      creator: creator.address,
       mint: parsed.data.paymentMint,
       amount: parsed.data.amount,
     });

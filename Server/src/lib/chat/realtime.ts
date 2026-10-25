@@ -19,6 +19,7 @@ import { getChatTopic } from "./pubsub";
 import { getMessageOwner, hasChatAccess, isTransientNetworkError } from "./chat-helpers";
 import { canDeleteMessage, canEditMessage, canSendDmMessage } from "./message-permissions";
 import { privy } from "../privy";
+import { getSolanaEmbeddedWalletAddress } from "../../middleware/authMiddleware";
 
 export type ChatSocketData = {
   chatId: string;
@@ -70,12 +71,16 @@ async function getCurrentUserFromToken(token: string) {
   const claims = await privy
     .utils()
     .auth()
-    .verifyAuthToken(token);
+    .verifyAccessToken(token);
+
+  const privyUser = await privy.users()._get(claims.user_id);
+  const walletAddress = getSolanaEmbeddedWalletAddress(privyUser.linked_accounts);
+  if (!walletAddress) return undefined;
 
   const [user] = await db
-    .select({ id: users.id, walletAddress: users.walletAddress })
+    .select({ id: users.id, walletAddress: users.address })
     .from(users)
-    .where(eq(users.privyUserId, claims.user_id))
+    .where(eq(users.address, walletAddress))
     .limit(1);
 
   return user;

@@ -56,37 +56,11 @@ export const markets = pgTable(
 export const marketTypeSchema = z.enum(["DM", "GROUP"]);
 export const paymentTypeSchema = z.enum(["USDC", "CREATOR_TOKEN"]);
 
-export const marketSchema = z
-  .object({
-    marketType: marketTypeSchema,
-    paymentType: paymentTypeSchema,
-    // Keep this optional for older clients; the controller derives the safe
-    // default from the market type before inserting/updating.
-    priceAmount: z.number().positive().optional(),
-  })
-  .refine(
-    (data) =>
-      data.marketType !== "GROUP" || data.paymentType === "CREATOR_TOKEN",
-    {
-      message: "Private group markets require creator token payment",
-      path: ["paymentType"],
-    },
-  )
-  .refine((data) => data.priceAmount !== undefined, {
-    message: "A price amount is required",
-    path: ["priceAmount"],
-  })
-  .refine(
-    (data) =>
-      data.marketType !== "GROUP" || {
-        message: "Private community access must use holders or minutes",
-        path: ["accessRule"],
-      },
-  )
-  .refine(
-    (data) =>
-      data.marketType !== "DM" || {
-        message: "Direct messages must use fixed pricing",
-        path: ["accessRule"],
-      },
-  );
+export const marketSchema = z.object({
+  marketType: marketTypeSchema,
+  paymentType: paymentTypeSchema,
+  amount: z.number().positive(),
+}).refine(
+  (data) => data.marketType !== "GROUP" || data.paymentType === "CREATOR_TOKEN",
+  { message: "Private group markets require creator token payment", path: ["paymentType"] },
+);

@@ -11,8 +11,8 @@ import { getLaunchWalletAddress } from "../lib/meteora/creator-token-launch";
 const RPC_URL = process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
 let reviewsTableUnavailable = false;
 
-async function getCurrentUser(privyUserId: string) {
-  const [user] = await db.select().from(users).where(eq(users.privyUserId, privyUserId)).limit(1);
+async function getCurrentUser(walletAddress: string) {
+  const [user] = await db.select().from(users).where(eq(users.address, walletAddress)).limit(1);
   return user;
 }
 
@@ -40,13 +40,13 @@ function chartBuckets(buckets: Map<string, number>, days: number) {
 
 export async function getMyEarnings(c: Context<AppEnv>) {
   try {
-    const creator = await getCurrentUser(c.get("privyUserId"));
+    const creator = await getCurrentUser(c.get("walletAddress"));
     if (!creator) return c.json({ success: false, message: "Create your user profile first" }, 404);
 
     const completedRequests = await db
       .select({ amount: dmRequests.amount, userId: dmRequests.userId, createdAt: dmRequests.createdAt })
       .from(dmRequests)
-      .where(and(eq(dmRequests.creatorId, creator.id), eq(dmRequests.status, "completed")))
+      .where(and(eq(dmRequests.creatorId, creator.id), eq(dmRequests.status, "COMPLETED")))
       .orderBy(desc(dmRequests.createdAt));
 
     let tokenPrice = 0;
@@ -87,7 +87,7 @@ export async function getMyEarnings(c: Context<AppEnv>) {
 
     const spenderIds = [...spenderTotals.keys()];
     const spenderRows = spenderIds.length
-      ? await db.select({ id: users.id, displayName: users.displayName, username: users.username, walletAddress: users.walletAddress }).from(users).where(inArray(users.id, spenderIds))
+      ? await db.select({ id: users.id, name: users.name, username: users.username, walletAddress: users.address }).from(users).where(inArray(users.id, spenderIds))
       : [];
     const spenderById = new Map(spenderRows.map((spender) => [spender.id, spender]));
     const spenders = spenderIds
@@ -95,8 +95,8 @@ export async function getMyEarnings(c: Context<AppEnv>) {
         const spender = spenderById.get(id);
         if (!spender) return null;
         return {
-          name: spender.displayName || spender.username,
-          initials: (spender.displayName || spender.username).slice(0, 2).toUpperCase(),
+          name: spender.name || spender.username,
+          initials: (spender.name || spender.username).slice(0, 2).toUpperCase(),
           wallet: shortAddress(spender.walletAddress),
           amount: Number((spenderTotals.get(id) ?? 0).toFixed(6)),
         };
@@ -136,12 +136,12 @@ export async function getMyEarnings(c: Context<AppEnv>) {
         .map((item) => item.owner)
         .filter((owner) => !excludedHolders.has(owner));
       const ownerUsers = ownerAddresses.length
-        ? await db.select({ walletAddress: users.walletAddress, displayName: users.displayName, username: users.username }).from(users).where(inArray(users.walletAddress, ownerAddresses))
+        ? await db.select({ walletAddress: users.address, name: users.name, username: users.username }).from(users).where(inArray(users.address, ownerAddresses))
         : [];
       const ownerMap = new Map(ownerUsers.map((owner) => [owner.walletAddress, owner]));
       holders = owners.filter(({ owner }) => !excludedHolders.has(owner)).map(({ entry, owner }) => {
         const user = ownerMap.get(owner);
-        const name = user?.displayName || user?.username || shortAddress(owner);
+        const name = user?.name || user?.username || shortAddress(owner);
         return { name, initials: name.slice(0, 2).toUpperCase(), wallet: shortAddress(owner), amount: Number(entry.uiAmountString ?? 0) };
       }).sort((a, b) => b.amount - a.amount).slice(0, 5);
     }

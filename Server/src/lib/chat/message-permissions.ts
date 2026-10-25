@@ -14,7 +14,7 @@ export async function canSendDmMessage(chatId: string, userId: string) {
   const [creatorMarket] = await db
     .select({ userId: markets.userId })
     .from(markets)
-    .where(and(eq(markets.marketType, "dm"), inArray(markets.userId, memberIds)))
+    .where(and(eq(markets.marketType, "DM"), inArray(markets.userId, memberIds)))
     .limit(1);
 
   return creatorMarket?.userId === userId;

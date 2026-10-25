@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   index,
   pgEnum,
@@ -25,10 +26,6 @@ export const chats = pgTable(
         onDelete: "cascade",
       }),
 
-    creatorId: uuid("creator_id").references(() => users.id, {
-      onDelete: "cascade",
-    }),
-
     createdAt: timestamp("created_at", {
       withTimezone: true,
     })
@@ -42,8 +39,10 @@ export const chats = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("chats_creator_group_unique").on(table.creatorId, table.type),
-    index("chats_creator_id_idx").on(table.creatorId),
+    uniqueIndex("chats_admin_group_unique")
+      .on(table.admin)
+      .where(sql`${table.type} = 'GROUP'`),
+    index("chats_admin_idx").on(table.admin),
   ],
 );
 

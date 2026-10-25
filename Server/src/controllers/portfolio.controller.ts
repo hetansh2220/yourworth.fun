@@ -48,7 +48,7 @@ export async function getMyPortfolio(c: Context<AppEnv>) {
     const [solLamports, tokenAccounts, creatorUsers] = await Promise.all([
       connection.getBalance(owner, "confirmed"),
       connection.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, "confirmed"),
-      db.select({ username: users.username, displayName: users.displayName, avatar: users.avatar, token: users.token, poolAddress: users.poolAddress }).from(users).where(isNotNull(users.token)),
+      db.select({ username: users.username, name: users.name, avatar: users.avatar, token: users.token, poolAddress: users.poolAddress }).from(users).where(isNotNull(users.token)),
     ]);
 
     const creatorsByMint = new Map(
@@ -91,7 +91,7 @@ export async function getMyPortfolio(c: Context<AppEnv>) {
       const isUsdc = mint === USDC_DEVNET.toBase58();
       return [{
         mint,
-        name: isUsdc ? "USD Coin" : creator?.displayName || creator?.username || "Unknown token",
+        name: isUsdc ? "USD Coin" : creator?.name || creator?.username || "Unknown token",
         symbol: isUsdc ? "USDC" : (creator?.username ?? mint.slice(0, 6)).slice(0, 8).toUpperCase(),
         image: creator?.avatar ?? "",
         amount,

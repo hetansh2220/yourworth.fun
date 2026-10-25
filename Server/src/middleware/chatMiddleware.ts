@@ -21,7 +21,7 @@ export async function chatMemberMiddleware(c: Context<AppEnv>, next: Next) {
   }
 
   try {
-    const user = await getCurrentUser(c.get("privyUserId"));
+    const user = await getCurrentUser(c.get("walletAddress"));
 
     if (!user) {
       return c.json(
@@ -33,11 +33,11 @@ export async function chatMemberMiddleware(c: Context<AppEnv>, next: Next) {
       );
     }
 
-    const membership = await hasChatAccess(parsedChatId.data, user.id, user.walletAddress);
+    const membership = await hasChatAccess(parsedChatId.data, user.id, user.address);
 
     if (!membership) {
       const existingMembership = await getChatAccess(parsedChatId.data, user.id);
-      if (existingMembership?.chatType === "GROUP" && existingMembership.creatorId && existingMembership.creatorId !== user.id) {
+      if (existingMembership?.chatType === "GROUP" && existingMembership.chatAdminId && existingMembership.chatAdminId !== user.id) {
         await db.delete(chatMembers).where(and(eq(chatMembers.chatId, parsedChatId.data), eq(chatMembers.userId, user.id)));
         return c.json(
           {

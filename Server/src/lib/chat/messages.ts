@@ -12,12 +12,11 @@ export const messageFields = {
   content: messages.content,
   createdAt: messages.createdAt,
   updatedAt: messages.updatedAt,
-  editedAt: messages.editedAt,
   deletedAt: messages.deletedAt,
   sender: {
     id: users.id,
     username: users.username,
-    displayName: users.displayName,
+    name: users.name,
     avatar: users.avatar,
   },
 };
@@ -69,7 +68,6 @@ export async function updateChatMessageContent(
     .update(messages)
     .set({
       content,
-      editedAt: now,
       updatedAt: now,
     })
     .where(eq(messages.id, messageId))

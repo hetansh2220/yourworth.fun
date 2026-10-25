@@ -44,27 +44,24 @@ const marketWithUserFields = {
   id: markets.id,
   marketType: markets.marketType,
   paymentType: markets.paymentType,
-  accessRule: markets.accessRule,
-  priceAmount: markets.priceAmount,
+  amount: markets.amount,
   createdAt: markets.createdAt,
   updatedAt: markets.updatedAt,
   user: {
     id: users.id,
     username: users.username,
-    displayName: users.displayName,
+    name: users.name,
     avatar: users.avatar,
     bio: users.bio,
     token: users.token,
-    xConnected: users.xConnected,
-    xUsername: users.xUsername,
   },
 };
 
-async function getCurrentUser(privyUserId: string) {
+async function getCurrentUser(walletAddress: string) {
   const [user] = await db
     .select()
     .from(users)
-    .where(eq(users.privyUserId, privyUserId))
+    .where(eq(users.address, walletAddress))
     .limit(1);
 
   return user;
@@ -72,7 +69,7 @@ async function getCurrentUser(privyUserId: string) {
 
 async function getMarketByUserAndType(
   userId: string,
-  marketType: "dm" | "group",
+  marketType: "DM" | "GROUP",
 ) {
   const [market] = await db
     .select(marketWithUserFields)
@@ -94,7 +91,7 @@ async function getMarketsByUserId(userId: string) {
 }
 
 export async function createMarket(c: Context<AppEnv>) {
-  const privyUserId = c.get("privyUserId");
+  const walletAddress = c.get("walletAddress");
   const body = await c.req.json().catch(() => null);
   const parsedBody = marketSchema.safeParse(body);
 
@@ -108,16 +105,10 @@ export async function createMarket(c: Context<AppEnv>) {
     );
   }
 
-  const accessRule =
-    parsedBody.data.accessRule ??
-    (parsedBody.data.marketType === "group" ? "holders" : "fixed");
-  // Paid DMs are settled in the creator's token. The priceAmount is the
-  // number of creator-token units the buyer deposits into escrow.
-  const paymentType =
-    parsedBody.data.marketType === "dm" ? "token" : parsedBody.data.paymentType;
+  const paymentType = parsedBody.data.paymentType;
 
   try {
-    const user = await getCurrentUser(privyUserId);
+    const user = await getCurrentUser(walletAddress);
 
     if (!user) {
       return c.json(
@@ -139,11 +130,7 @@ export async function createMarket(c: Context<AppEnv>) {
         .update(markets)
         .set({
           paymentType,
-          accessRule,
-          priceAmount:
-            accessRule === "holders"
-              ? null
-              : (parsedBody.data.priceAmount?.toString() ?? null),
+        amount: parsedBody.data.amount.toString(),
           updatedAt: new Date(),
         })
         .where(eq(markets.id, existingMarket.id))
@@ -165,11 +152,7 @@ export async function createMarket(c: Context<AppEnv>) {
       userId: user.id,
       marketType: parsedBody.data.marketType,
       paymentType,
-      accessRule,
-      priceAmount:
-        accessRule === "holders"
-          ? null
-          : parsedBody.data.priceAmount?.toString(),
+      amount: parsedBody.data.amount.toString(),
     });
 
     const market = await getMarketByUserAndType(
@@ -333,7 +316,7 @@ export async function getMarket(c: Context<AppEnv>) {
 }
 
 export async function getMyMarket(c: Context<AppEnv>) {
-  const privyUserId = c.get("privyUserId");
+  const walletAddress = c.get("walletAddress");
   const parsedMarketType = getMarketTypeQuery(c);
 
   if (parsedMarketType && !parsedMarketType.success) {
@@ -347,7 +330,7 @@ export async function getMyMarket(c: Context<AppEnv>) {
   }
 
   try {
-    const user = await getCurrentUser(privyUserId);
+    const user = await getCurrentUser(walletAddress);
 
     if (!user) {
       return c.json(
@@ -406,7 +389,7 @@ export async function getMyMarket(c: Context<AppEnv>) {
 }
 
 export async function updateMarket(c: Context<AppEnv>) {
-  const privyUserId = c.get("privyUserId");
+  const walletAddress = c.get("walletAddress");
   const body = await c.req.json().catch(() => null);
   const parsedBody = marketSchema.safeParse(body);
 
@@ -420,14 +403,10 @@ export async function updateMarket(c: Context<AppEnv>) {
     );
   }
 
-  const accessRule =
-    parsedBody.data.accessRule ??
-    (parsedBody.data.marketType === "group" ? "holders" : "fixed");
-  const paymentType =
-    parsedBody.data.marketType === "dm" ? "token" : parsedBody.data.paymentType;
+  const paymentType = parsedBody.data.paymentType;
 
   try {
-    const user = await getCurrentUser(privyUserId);
+    const user = await getCurrentUser(walletAddress);
 
     if (!user) {
       return c.json(
@@ -443,11 +422,7 @@ export async function updateMarket(c: Context<AppEnv>) {
       .update(markets)
       .set({
         paymentType,
-        accessRule,
-        priceAmount:
-          accessRule === "holders"
-            ? null
-            : (parsedBody.data.priceAmount?.toString() ?? null),
+        amount: parsedBody.data.amount.toString(),
         updatedAt: new Date(),
       })
       .where(

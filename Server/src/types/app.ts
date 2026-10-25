@@ -1,5 +1,4 @@
 export type AppVariables = {
-  privyUserId: string;
   walletAddress: string;
   currentUserId: string;
   chatId: string;
