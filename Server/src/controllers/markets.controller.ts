@@ -2,9 +2,9 @@ import type { Context } from "hono";
 import { and, desc, eq, lt } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "../db";
-import { marketSchema, markets, marketTypeSchema, users } from "../db/schema";
-import type { AppEnv } from "../types/app";
+import { db } from "@/db";
+import { marketSchema, markets, marketTypeSchema, users } from "@/db/schema";
+import type { AppEnv } from "@/types/app";
 
 function getErrorCode(error: unknown) {
   return typeof error === "object" &&

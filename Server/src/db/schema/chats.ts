@@ -9,7 +9,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { users } from "./users";
+import { users } from "@/db/schema/users";
 
 export const chatTypeEnum = pgEnum("chat_type", ["DM", "GROUP"]);
 

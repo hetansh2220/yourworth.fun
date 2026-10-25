@@ -9,7 +9,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
-import { users } from "./users";
+import { users } from "@/db/schema/users";
 
 export const reviews = pgTable(
   "reviews",

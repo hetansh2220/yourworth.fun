@@ -8,7 +8,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import { users } from "./users";
+import { users } from "@/db/schema/users";
 
 export const marketTypeEnum = pgEnum("market_type", ["DM", "GROUP"]);
 export const paymentTypeEnum = pgEnum("payment_type", [

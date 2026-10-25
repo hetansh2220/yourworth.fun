@@ -7,7 +7,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
-import { users } from "./users";
+import { users } from "@/db/schema/users";
 
 export const watchlist = pgTable(
   "watchlist",

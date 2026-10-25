@@ -12,8 +12,8 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-import { chats, messages } from "./chats";
-import { users } from "./users";
+import { chats, messages } from "@/db/schema/chats";
+import { users } from "@/db/schema/users";
 
 export const dmRequestStatusEnum = pgEnum("dm_request_status", [
   "PENDING",

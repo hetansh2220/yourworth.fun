@@ -1,5 +1,5 @@
 import { DynamicBondingCurveClient } from "@meteora-ag/dynamic-bonding-curve-sdk";
-import connection from "./connection";
+import connection from "@/lib/connection";
 
 const dbc = new DynamicBondingCurveClient(connection, "confirmed");
 

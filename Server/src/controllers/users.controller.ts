@@ -1,9 +1,9 @@
 import type { Context } from "hono";
 import { desc, eq, lt } from "drizzle-orm";
 
-import { db } from "../db";
-import { createUserSchema, updateUserSchema, users } from "../db/schema";
-import type { AppEnv } from "../types/app";
+import { db } from "@/db";
+import { createUserSchema, updateUserSchema, users } from "@/db/schema";
+import type { AppEnv } from "@/types/app";
 
 function getErrorCode(error: unknown) {
   return typeof error === "object" &&

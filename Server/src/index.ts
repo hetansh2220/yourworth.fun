@@ -1,17 +1,14 @@
 import "dotenv/config";
 import { Hono } from "hono";
-import { getUserByToken } from "./controllers/users.controller";
-import { usersRoute } from "./routes/users";
-import { watchlistRoute } from "./routes/watchlist";
-import { reviewsRoute } from "./routes/reviews";
-import { marketsRoute } from "./routes/markets";
-import { chatsRoute } from "./routes/chats";
-import { creatorTokensRoute } from "./routes/creator-tokens";
-import { dmRequestsRoute } from "./routes/dm-requests";
-import { chatWebSocket, upgradeChatWebSocket } from "./lib/chat/realtime";
-import { setChatServer } from "./lib/chat/pubsub";
-import type { AppEnv } from "./types/app";
+import { getUserByToken } from "@/controllers/users.controller";
+import { usersRoute } from "@/routes/users.route";
+import { watchlistRoute } from "@/routes/watchlist.route";
+import { reviewsRoute } from "@/routes/reviews.route";
+import { marketsRoute } from "@/routes/markets.route";
+import { chatsRoute } from "@/routes/chats.route";
+import type { AppEnv } from "@/types/app";
 import { cors } from "hono/cors";
+import { setWebSocketServer } from "@/lib/websocket";
 
 const app = new Hono<AppEnv>();
 const clientOrigin = process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
@@ -36,30 +33,12 @@ app.route("/watchlist", watchlistRoute);
 app.route("/reviews", reviewsRoute);
 app.route("/markets", marketsRoute);
 app.route("/chats", chatsRoute);
-app.route("/creator-tokens", creatorTokensRoute);
-app.route("/dm-requests", dmRequestsRoute);
 app.get("/:token", getUserByToken);
 
 export default {
   port: 8080,
-  async fetch(
-    req: Request,
-    server: Bun.Server<import("./lib/chat/realtime").ChatSocketData>,
-  ) {
-    setChatServer(server);
-    const url = new URL(req.url);
-
-    if (url.pathname.match(/^\/chats\/[^/]+\/ws$/)) {
-      const response = await upgradeChatWebSocket(req, server);
-
-      if (response) {
-        return response;
-      }
-
-      return undefined;
-    }
-
+  fetch(req: Request, server: Bun.Server<unknown>) {
+    setWebSocketServer(server);
     return app.fetch(req);
   },
-  websocket: chatWebSocket,
 };
