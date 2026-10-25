@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeftIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon, UsersIcon } from "@phosphor-icons/react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -16,6 +15,7 @@ import {
   type Conversation,
 } from "@/components/chats/conversation-list";
 import { cn } from "@/lib/utils";
+import GrpMembersDialog from "@/components/dialogs/grp-members-dialog";
 
 const initialConversations: Conversation[] = [
   {
@@ -98,6 +98,10 @@ const initialConversations: Conversation[] = [
       },
     ],
   },
+  { id: "noah", name: "Noah Williams", initials: "NW", unread: 0, messages: [] },
+  { id: "maya", name: "Maya Patel", initials: "MP", unread: 0, messages: [] },
+  { id: "ethan", name: "Ethan Brooks", initials: "EB", unread: 0, messages: [] },
+  { id: "sophia", name: "Sophia Chen", initials: "SC", unread: 0, messages: [] },
 ];
 
 export function ChatsScreen() {
@@ -176,7 +180,12 @@ export function ChatsScreen() {
             <h2 className="min-w-0 flex-1 truncate font-medium">
               {selected.name}
             </h2>
-            <Badge variant="outline" className="border-white/10 text-muted-foreground">Demo chat</Badge>
+            <GrpMembersDialog members={conversations}>
+              <Button variant="ghost" className="gap-2 text-muted-foreground hover:text-foreground" aria-label={`View ${conversations.length} group members`}>
+                <UsersIcon aria-hidden="true" />
+                <span className="tabular-nums">{conversations.length}</span>
+              </Button>
+            </GrpMembersDialog>
           </header>
           <div className="min-h-0 flex-1">
             <ChatMessages
