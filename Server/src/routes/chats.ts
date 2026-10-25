@@ -11,7 +11,12 @@ import {
   markChatRead,
   removeGroupMember,
 } from "../controllers/chats.controller";
-import { editMessage, getMessages, removeMessage, sendMessage } from "../controllers/messages.controller";
+import {
+  editMessage,
+  getMessages,
+  removeMessage,
+  sendMessage,
+} from "../controllers/messages.controller";
 import { authMiddleware } from "../middleware/authMiddleware";
 import {
   chatMemberMiddleware,
@@ -26,43 +31,48 @@ chatsRoute.post("/group", authMiddleware, createGroupChat);
 chatsRoute.get("/private-group/me", authMiddleware, getOrCreateMyPrivateGroup);
 chatsRoute.post("/private-group/join", authMiddleware, joinPrivateGroup);
 chatsRoute.get("/", authMiddleware, getMyChats);
-chatsRoute.patch("/:chatId/read", authMiddleware, chatMemberMiddleware, markChatRead);
+chatsRoute.patch(
+  "/:chatId/read",
+  authMiddleware,
+  chatMemberMiddleware,
+  markChatRead,
+);
 chatsRoute.get("/:chatId", authMiddleware, chatMemberMiddleware, getChatById);
 chatsRoute.get(
   "/:chatId/messages",
   authMiddleware,
   chatMemberMiddleware,
-  getMessages
+  getMessages,
 );
 chatsRoute.post(
   "/:chatId/messages",
   authMiddleware,
   chatMemberMiddleware,
-  sendMessage
+  sendMessage,
 );
 chatsRoute.patch(
   "/:chatId/messages/:messageId",
   authMiddleware,
   chatMemberMiddleware,
-  editMessage
+  editMessage,
 );
 chatsRoute.delete(
   "/:chatId/messages/:messageId",
   authMiddleware,
   chatMemberMiddleware,
-  removeMessage
+  removeMessage,
 );
 chatsRoute.post(
   "/:chatId/members",
   authMiddleware,
   chatMemberMiddleware,
   groupAdminMiddleware,
-  addGroupMember
+  addGroupMember,
 );
 chatsRoute.delete(
   "/:chatId/members/:userId",
   authMiddleware,
   chatMemberMiddleware,
   groupAdminMiddleware,
-  removeGroupMember
+  removeGroupMember,
 );

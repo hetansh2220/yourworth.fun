@@ -3,12 +3,7 @@ import { and, desc, eq, lt } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
-import {
-  marketSchema,
-  markets,
-  marketTypeSchema,
-  users,
-} from "../db/schema";
+import { marketSchema, markets, marketTypeSchema, users } from "../db/schema";
 import type { AppEnv } from "../types/app";
 
 function getErrorCode(error: unknown) {
@@ -32,9 +27,7 @@ function getCursor(c: Context<AppEnv>) {
   const cursor = c.req.query("cursor");
   const cursorDate = cursor ? new Date(cursor) : null;
 
-  return cursorDate && !Number.isNaN(cursorDate.getTime())
-    ? cursorDate
-    : null;
+  return cursorDate && !Number.isNaN(cursorDate.getTime()) ? cursorDate : null;
 }
 
 function getMarketTypeQuery(c: Context<AppEnv>) {
@@ -79,7 +72,7 @@ async function getCurrentUser(privyUserId: string) {
 
 async function getMarketByUserAndType(
   userId: string,
-  marketType: "dm" | "group"
+  marketType: "dm" | "group",
 ) {
   const [market] = await db
     .select(marketWithUserFields)
@@ -111,17 +104,17 @@ export async function createMarket(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
-  const accessRule = parsedBody.data.accessRule ??
+  const accessRule =
+    parsedBody.data.accessRule ??
     (parsedBody.data.marketType === "group" ? "holders" : "fixed");
   // Paid DMs are settled in the creator's token. The priceAmount is the
   // number of creator-token units the buyer deposits into escrow.
-  const paymentType = parsedBody.data.marketType === "dm"
-    ? "token"
-    : parsedBody.data.paymentType;
+  const paymentType =
+    parsedBody.data.marketType === "dm" ? "token" : parsedBody.data.paymentType;
 
   try {
     const user = await getCurrentUser(privyUserId);
@@ -132,13 +125,13 @@ export async function createMarket(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
     const existingMarket = await getMarketByUserAndType(
       user.id,
-      parsedBody.data.marketType
+      parsedBody.data.marketType,
     );
 
     if (existingMarket) {
@@ -147,7 +140,10 @@ export async function createMarket(c: Context<AppEnv>) {
         .set({
           paymentType,
           accessRule,
-          priceAmount: accessRule === "holders" ? null : parsedBody.data.priceAmount?.toString() ?? null,
+          priceAmount:
+            accessRule === "holders"
+              ? null
+              : (parsedBody.data.priceAmount?.toString() ?? null),
           updatedAt: new Date(),
         })
         .where(eq(markets.id, existingMarket.id))
@@ -157,9 +153,11 @@ export async function createMarket(c: Context<AppEnv>) {
         {
           success: true,
           message: "Market updated successfully",
-          market: updatedMarket ? await getMarketByUserAndType(user.id, parsedBody.data.marketType) : existingMarket,
+          market: updatedMarket
+            ? await getMarketByUserAndType(user.id, parsedBody.data.marketType)
+            : existingMarket,
         },
-        200
+        200,
       );
     }
 
@@ -168,12 +166,15 @@ export async function createMarket(c: Context<AppEnv>) {
       marketType: parsedBody.data.marketType,
       paymentType,
       accessRule,
-      priceAmount: accessRule === "holders" ? null : parsedBody.data.priceAmount?.toString(),
+      priceAmount:
+        accessRule === "holders"
+          ? null
+          : parsedBody.data.priceAmount?.toString(),
     });
 
     const market = await getMarketByUserAndType(
       user.id,
-      parsedBody.data.marketType
+      parsedBody.data.marketType,
     );
 
     return c.json(
@@ -182,7 +183,7 @@ export async function createMarket(c: Context<AppEnv>) {
         message: "Market created successfully",
         market,
       },
-      201
+      201,
     );
   } catch (error) {
     console.error("Create market error:", error);
@@ -193,7 +194,7 @@ export async function createMarket(c: Context<AppEnv>) {
           success: false,
           message: "Market already exists",
         },
-        409
+        409,
       );
     }
 
@@ -202,7 +203,7 @@ export async function createMarket(c: Context<AppEnv>) {
         success: false,
         message: "Failed to create market",
       },
-      500
+      500,
     );
   }
 }
@@ -218,7 +219,7 @@ export async function getMarkets(c: Context<AppEnv>) {
         success: false,
         message: "Market type is invalid",
       },
-      400
+      400,
     );
   }
 
@@ -233,9 +234,9 @@ export async function getMarkets(c: Context<AppEnv>) {
             marketType
               ? and(
                   lt(markets.createdAt, cursor),
-                  eq(markets.marketType, marketType)
+                  eq(markets.marketType, marketType),
                 )
-              : lt(markets.createdAt, cursor)
+              : lt(markets.createdAt, cursor),
           )
           .orderBy(desc(markets.createdAt))
           .limit(limit + 1)
@@ -267,7 +268,7 @@ export async function getMarkets(c: Context<AppEnv>) {
         markets: visibleMarkets,
         nextCursor,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get markets error:", error);
@@ -276,7 +277,7 @@ export async function getMarkets(c: Context<AppEnv>) {
         success: false,
         message: "Failed to retrieve markets",
       },
-      500
+      500,
     );
   }
 }
@@ -290,7 +291,7 @@ export async function getMarket(c: Context<AppEnv>) {
         success: false,
         message: "Market id is invalid",
       },
-      400
+      400,
     );
   }
 
@@ -308,7 +309,7 @@ export async function getMarket(c: Context<AppEnv>) {
           success: false,
           message: "Market not found",
         },
-        404
+        404,
       );
     }
 
@@ -317,7 +318,7 @@ export async function getMarket(c: Context<AppEnv>) {
         success: true,
         market,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get market error:", error);
@@ -326,7 +327,7 @@ export async function getMarket(c: Context<AppEnv>) {
         success: false,
         message: "Failed to retrieve market",
       },
-      500
+      500,
     );
   }
 }
@@ -341,7 +342,7 @@ export async function getMyMarket(c: Context<AppEnv>) {
         success: false,
         message: "Market type is invalid",
       },
-      400
+      400,
     );
   }
 
@@ -354,12 +355,15 @@ export async function getMyMarket(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
     if (parsedMarketType?.data) {
-      const market = await getMarketByUserAndType(user.id, parsedMarketType.data);
+      const market = await getMarketByUserAndType(
+        user.id,
+        parsedMarketType.data,
+      );
 
       if (!market) {
         return c.json(
@@ -367,7 +371,7 @@ export async function getMyMarket(c: Context<AppEnv>) {
             success: false,
             message: "Market not found",
           },
-          404
+          404,
         );
       }
 
@@ -376,7 +380,7 @@ export async function getMyMarket(c: Context<AppEnv>) {
           success: true,
           market,
         },
-        200
+        200,
       );
     }
 
@@ -387,7 +391,7 @@ export async function getMyMarket(c: Context<AppEnv>) {
         success: true,
         markets: marketList,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get my market error:", error);
@@ -396,7 +400,7 @@ export async function getMyMarket(c: Context<AppEnv>) {
         success: false,
         message: "Failed to retrieve market",
       },
-      500
+      500,
     );
   }
 }
@@ -412,15 +416,15 @@ export async function updateMarket(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
-  const accessRule = parsedBody.data.accessRule ??
+  const accessRule =
+    parsedBody.data.accessRule ??
     (parsedBody.data.marketType === "group" ? "holders" : "fixed");
-  const paymentType = parsedBody.data.marketType === "dm"
-    ? "token"
-    : parsedBody.data.paymentType;
+  const paymentType =
+    parsedBody.data.marketType === "dm" ? "token" : parsedBody.data.paymentType;
 
   try {
     const user = await getCurrentUser(privyUserId);
@@ -431,7 +435,7 @@ export async function updateMarket(c: Context<AppEnv>) {
           success: false,
           message: "Create your user profile first",
         },
-        404
+        404,
       );
     }
 
@@ -440,14 +444,17 @@ export async function updateMarket(c: Context<AppEnv>) {
       .set({
         paymentType,
         accessRule,
-        priceAmount: accessRule === "holders" ? null : parsedBody.data.priceAmount?.toString() ?? null,
+        priceAmount:
+          accessRule === "holders"
+            ? null
+            : (parsedBody.data.priceAmount?.toString() ?? null),
         updatedAt: new Date(),
       })
       .where(
         and(
           eq(markets.userId, user.id),
-          eq(markets.marketType, parsedBody.data.marketType)
-        )
+          eq(markets.marketType, parsedBody.data.marketType),
+        ),
       )
       .returning({ id: markets.id });
 
@@ -457,13 +464,13 @@ export async function updateMarket(c: Context<AppEnv>) {
           success: false,
           message: "Market not found",
         },
-        404
+        404,
       );
     }
 
     const market = await getMarketByUserAndType(
       user.id,
-      parsedBody.data.marketType
+      parsedBody.data.marketType,
     );
 
     return c.json(
@@ -472,7 +479,7 @@ export async function updateMarket(c: Context<AppEnv>) {
         message: "Market updated successfully",
         market,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Update market error:", error);
@@ -481,7 +488,7 @@ export async function updateMarket(c: Context<AppEnv>) {
         success: false,
         message: "Failed to update market",
       },
-      500
+      500,
     );
   }
 }

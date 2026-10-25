@@ -2,6 +2,7 @@ import "dotenv/config";
 import { Hono } from "hono";
 import { getUserByToken } from "./controllers/users.controller";
 import { usersRoute } from "./routes/users";
+import { watchlistRoute } from "./routes/watchlist";
 import { marketsRoute } from "./routes/markets";
 import { chatsRoute } from "./routes/chats";
 import { creatorTokensRoute } from "./routes/creator-tokens";
@@ -20,7 +21,7 @@ app.use(
     origin: clientOrigin,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-  })
+  }),
 );
 
 app.get("/", (c) => {
@@ -30,6 +31,7 @@ app.get("/", (c) => {
 });
 
 app.route("/users", usersRoute);
+app.route("/watchlist", watchlistRoute);
 app.route("/markets", marketsRoute);
 app.route("/chats", chatsRoute);
 app.route("/creator-tokens", creatorTokensRoute);
@@ -38,7 +40,10 @@ app.get("/:token", getUserByToken);
 
 export default {
   port: 8080,
-  async fetch(req: Request, server: Bun.Server<import("./lib/chat/realtime").ChatSocketData>) {
+  async fetch(
+    req: Request,
+    server: Bun.Server<import("./lib/chat/realtime").ChatSocketData>,
+  ) {
     setChatServer(server);
     const url = new URL(req.url);
 

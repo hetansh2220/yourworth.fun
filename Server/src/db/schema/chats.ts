@@ -10,20 +10,14 @@ import {
 
 import { users } from "./users";
 
-export const chatTypeEnum = pgEnum("chat_type", [
-  "DM",
-  "GROUP",
-]);
+export const chatTypeEnum = pgEnum("chat_type", ["DM", "GROUP"]);
 
 export const chats = pgTable(
   "chats",
   {
-    id: uuid("id")
-      .defaultRandom()
-      .primaryKey(),
+    id: uuid("id").defaultRandom().primaryKey(),
 
-    type: chatTypeEnum("type")
-      .notNull(),
+    type: chatTypeEnum("type").notNull(),
 
     admin: uuid("admin")
       .notNull()
@@ -31,10 +25,9 @@ export const chats = pgTable(
         onDelete: "cascade",
       }),
 
-    creatorId: uuid("creator_id")
-      .references(() => users.id, {
-        onDelete: "cascade",
-      }),
+    creatorId: uuid("creator_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
 
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -49,23 +42,15 @@ export const chats = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("chats_creator_group_unique").on(
-      table.creatorId,
-      table.type
-    ),
-    index("chats_creator_id_idx").on(
-      table.creatorId
-    ),
-  ]
+    uniqueIndex("chats_creator_group_unique").on(table.creatorId, table.type),
+    index("chats_creator_id_idx").on(table.creatorId),
+  ],
 );
-
 
 export const chatMembers = pgTable(
   "chat_members",
   {
-    id: uuid("id")
-      .defaultRandom()
-      .primaryKey(),
+    id: uuid("id").defaultRandom().primaryKey(),
 
     chatId: uuid("chat_id")
       .notNull()
@@ -90,23 +75,15 @@ export const chatMembers = pgTable(
     }),
   },
   (table) => [
-    uniqueIndex("chat_member_unique").on(
-      table.chatId,
-      table.userId
-    ),
-    index("chat_members_user_id_idx").on(
-      table.userId
-    ),
-  ]
+    uniqueIndex("chat_member_unique").on(table.chatId, table.userId),
+    index("chat_members_user_id_idx").on(table.userId),
+  ],
 );
-
 
 export const messages = pgTable(
   "messages",
   {
-    id: uuid("id")
-      .defaultRandom()
-      .primaryKey(),
+    id: uuid("id").defaultRandom().primaryKey(),
 
     chatId: uuid("chat_id")
       .notNull()
@@ -120,8 +97,7 @@ export const messages = pgTable(
         onDelete: "cascade",
       }),
 
-    content: text("content")
-      .notNull(),
+    content: text("content").notNull(),
 
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -135,18 +111,11 @@ export const messages = pgTable(
       .defaultNow()
       .notNull(),
 
-    editedAt: timestamp("edited_at", {
-      withTimezone: true,
-    }),
-
     deletedAt: timestamp("deleted_at", {
       withTimezone: true,
     }),
   },
   (table) => [
-    index("messages_chat_created_at_idx").on(
-      table.chatId,
-      table.createdAt
-    ),
-  ]
+    index("messages_chat_created_at_idx").on(table.chatId, table.createdAt),
+  ],
 );
