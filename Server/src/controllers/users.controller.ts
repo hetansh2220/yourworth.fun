@@ -28,7 +28,7 @@ export async function createUser(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
@@ -61,7 +61,7 @@ export async function createUser(c: Context<AppEnv>) {
           message: "User already exists",
           user: existingUser,
         },
-        200
+        200,
       );
     }
 
@@ -77,7 +77,7 @@ export async function createUser(c: Context<AppEnv>) {
           success: false,
           message: "Username already taken",
         },
-        409
+        409,
       );
     }
 
@@ -98,7 +98,7 @@ export async function createUser(c: Context<AppEnv>) {
         message: "User created successfully",
         user: newUser,
       },
-      201
+      201,
     );
   } catch (error) {
     console.error("Create user error:", error);
@@ -109,7 +109,7 @@ export async function createUser(c: Context<AppEnv>) {
           success: false,
           message: "Username or wallet already exists",
         },
-        409
+        409,
       );
     }
 
@@ -118,7 +118,7 @@ export async function createUser(c: Context<AppEnv>) {
         success: false,
         message: "Failed to create user",
       },
-      500
+      500,
     );
   }
 }
@@ -139,7 +139,7 @@ export async function getMe(c: Context<AppEnv>) {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -148,7 +148,7 @@ export async function getMe(c: Context<AppEnv>) {
         success: true,
         user,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get user error:", error);
@@ -157,7 +157,7 @@ export async function getMe(c: Context<AppEnv>) {
         success: false,
         message: "Failed to retrieve user",
       },
-      500
+      500,
     );
   }
 }
@@ -171,7 +171,7 @@ export async function getUserByToken(c: Context<AppEnv>) {
         success: false,
         message: "Token parameter is required",
       },
-      400
+      400,
     );
   }
 
@@ -187,7 +187,7 @@ export async function getUserByToken(c: Context<AppEnv>) {
         createdAt: users.createdAt,
       })
       .from(users)
-      .where(eq(users.token, token ))
+      .where(eq(users.token, token))
       .limit(1);
 
     if (!user) {
@@ -196,7 +196,7 @@ export async function getUserByToken(c: Context<AppEnv>) {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -205,7 +205,7 @@ export async function getUserByToken(c: Context<AppEnv>) {
         success: true,
         user,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get user by token error:", error);
@@ -214,7 +214,7 @@ export async function getUserByToken(c: Context<AppEnv>) {
         success: false,
         message: "Failed to retrieve user",
       },
-      500
+      500,
     );
   }
 }
@@ -264,7 +264,7 @@ export async function getUsers(c: Context<AppEnv>) {
         users: visibleUsers,
         nextCursor,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Get users error:", error);
@@ -273,7 +273,7 @@ export async function getUsers(c: Context<AppEnv>) {
         success: false,
         message: "Failed to retrieve users",
       },
-      500
+      500,
     );
   }
 }
@@ -309,7 +309,7 @@ export async function updateUser(c: Context<AppEnv>) {
         success: false,
         message: parsedBody.error.issues[0]?.message ?? "Invalid request body",
       },
-      400
+      400,
     );
   }
 
@@ -337,7 +337,7 @@ export async function updateUser(c: Context<AppEnv>) {
         success: false,
         message: "Nothing to update",
       },
-      400
+      400,
     );
   }
 
@@ -354,7 +354,7 @@ export async function updateUser(c: Context<AppEnv>) {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -371,7 +371,7 @@ export async function updateUser(c: Context<AppEnv>) {
             success: false,
             message: "Username already taken",
           },
-          409
+          409,
         );
       }
     }
@@ -388,7 +388,7 @@ export async function updateUser(c: Context<AppEnv>) {
         message: "User updated successfully",
         user: updatedUser,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Update user error:", error);
@@ -399,7 +399,7 @@ export async function updateUser(c: Context<AppEnv>) {
           success: false,
           message: "Username already exists",
         },
-        409
+        409,
       );
     }
 
@@ -408,7 +408,7 @@ export async function updateUser(c: Context<AppEnv>) {
         success: false,
         message: "Failed to update user",
       },
-      500
+      500,
     );
   }
 }
