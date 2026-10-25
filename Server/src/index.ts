@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { getUserByToken } from "./controllers/users.controller";
 import { usersRoute } from "./routes/users";
 import { watchlistRoute } from "./routes/watchlist";
+import { reviewsRoute } from "./routes/reviews";
 import { marketsRoute } from "./routes/markets";
 import { chatsRoute } from "./routes/chats";
 import { creatorTokensRoute } from "./routes/creator-tokens";
@@ -32,6 +33,7 @@ app.get("/", (c) => {
 
 app.route("/users", usersRoute);
 app.route("/watchlist", watchlistRoute);
+app.route("/reviews", reviewsRoute);
 app.route("/markets", marketsRoute);
 app.route("/chats", chatsRoute);
 app.route("/creator-tokens", creatorTokensRoute);
