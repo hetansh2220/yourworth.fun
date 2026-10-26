@@ -17,7 +17,12 @@ export const chatsRoute = new Hono<AppEnv>();
 chatsRoute.get("/", authMiddleware, getMyChats);
 chatsRoute.post("/dm", authMiddleware, createDM);
 chatsRoute.get("/:chatId", authMiddleware, chatMemberMiddleware, getChatById);
-chatsRoute.get("/members", authMiddleware, chatMemberMiddleware, getMembers);
+chatsRoute.get(
+  "/:chatId/members",
+  authMiddleware,
+  chatMemberMiddleware,
+  getMembers,
+);
 chatsRoute.get(
   "/:chatId/messages",
   authMiddleware,
