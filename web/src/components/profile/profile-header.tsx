@@ -1,4 +1,7 @@
+"use client";
+
 import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
+import { useUsers } from "@/hooks/use-profile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ProfileActions } from "@/components/profile/profile-actions";
@@ -33,7 +36,12 @@ export function ProfileHeader({
   xUsername,
   reviewedUserId,
 }: ProfileHeaderProps) {
-  const initials = name
+  const { data } = useUsers();
+  const matchedUser = data?.users.find((user) => user.username === username);
+  const profileName = matchedUser?.name ?? name;
+  const profileImage = matchedUser?.avatar ?? imageSrc;
+  const profileBio = matchedUser?.bio ?? bio;
+  const initials = profileName
     .trim()
     .split(/\s+/)
     .slice(0, 2)
@@ -46,7 +54,7 @@ export function ProfileHeader({
       className="flex flex-col gap-6 sm:flex-row sm:gap-8"
     >
       <Avatar className="size-32 rounded-xl after:rounded-xl sm:size-40 lg:size-48">
-        <AvatarImage src={imageSrc} alt={name} className="rounded-xl" />
+        <AvatarImage src={profileImage} alt={profileName} className="rounded-xl" />
         <AvatarFallback className="rounded-xl text-4xl">
           {initials}
         </AvatarFallback>
@@ -57,7 +65,7 @@ export function ProfileHeader({
             id="profile-name"
             className="break-words text-[32px] font-medium tracking-tight"
           >
-            {name}
+            {profileName}
           </h1>
           {verified && (
             <span role="img" aria-label="Verified" className="text-primary">
@@ -73,7 +81,7 @@ export function ProfileHeader({
             </Badge>
           )}
         </div>
-        <p className="text-base leading-relaxed text-muted-foreground">{bio}</p>
+        <p className="text-base leading-relaxed text-muted-foreground">{profileBio}</p>
         <ProfileStats
           rating={rating}
           reviewCount={reviewCount}
@@ -82,9 +90,9 @@ export function ProfileHeader({
         <ProfileActions
           contractAddress={contractAddress}
           xUsername={xUsername}
-          reviewedUserId={reviewedUserId}
-          name={name}
-          avatar={imageSrc}
+          name={profileName}
+          avatar={profileImage}
+          reviewedUserId={matchedUser?.id ?? reviewedUserId}
         />
       </div>
     </section>

@@ -36,11 +36,11 @@ export type WatchlistItem = {
 export async function getWatchlist(
   accessToken: string,
 ): Promise<WatchlistItem[]> {
-  const response = await api<{ success: true; entries: WatchlistItem[] }>(
+  const response = await api<{ success: true; watchlist: WatchlistItem[] }>(
     "/watchlist",
     { accessToken },
   );
-  return response.entries;
+  return response.watchlist ?? [];
 }
 
 /** Add a public user to the signed-in user's watchlist. */

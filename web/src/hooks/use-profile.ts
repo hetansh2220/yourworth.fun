@@ -16,12 +16,25 @@ import {
     checkUsernameAvailability,
     getUser,
     updateUser,
+    getUsers,
     type CreateUserInput,
     type UpdateUserInput,
     type User,
+    type UsersResponse,
 } from "@/utils/api/users";
 
 export const profileQueryKey = ["profile", "current"] as const;
+export const usersQueryKey = ["users"] as const;
+
+export function useUsers(
+    options?: Omit<UseQueryOptions<UsersResponse, Error>, "queryKey" | "queryFn">,
+) {
+    return useQuery({
+        ...options,
+        queryKey: usersQueryKey,
+        queryFn: () => getUsers({ limit: 50 }),
+    });
+}
 
 function missingTokenError() {
     return new Error("Your session is unavailable. Please try again.");

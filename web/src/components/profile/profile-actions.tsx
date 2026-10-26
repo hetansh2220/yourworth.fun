@@ -10,6 +10,12 @@ import {
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { ReviewDialog } from "@/components/dialogs/review-dialog";
+import {
+  useAddToWatchlist,
+  useRemoveFromWatchlist,
+  useWatchlist,
+} from "@/hooks/use-watchlist";
+import { toast } from "@/components/ui/toast";
 
 export function ProfileActions({
   contractAddress,
@@ -25,6 +31,15 @@ export function ProfileActions({
   avatar?: string;
 }) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
+  const addToWatchlist = useAddToWatchlist();
+  const removeFromWatchlist = useRemoveFromWatchlist();
+  const { data: watchlist } = useWatchlist();
+  const serverIsInWatchlist = Boolean(
+    reviewedUserId && watchlist?.some((entry) => entry.watchedUserId === reviewedUserId),
+  );
+  const [watchlistOverride, setWatchlistOverride] = useState<boolean | null>(null);
+  const isInWatchlist = watchlistOverride ?? serverIsInWatchlist;
+  const watchlistPending = addToWatchlist.isPending || removeFromWatchlist.isPending;
   async function copyAddress() {
     if (!contractAddress) return;
     try {
@@ -83,8 +98,41 @@ export function ProfileActions({
             <XLogoIcon aria-hidden="true" />
           </Button>
         )}
-        <Button variant="outline" className="size-10 rounded-lg">
-          <BookmarkSimpleIcon aria-hidden="true" />
+        <Button
+          variant="outline"
+          className="size-10 rounded-lg"
+          disabled={watchlistPending}
+          aria-label={isInWatchlist ? `Remove ${name} from watchlist` : `Add ${name} to watchlist`}
+          onClick={async () => {
+            if (!reviewedUserId) {
+              toast.add({
+                title: "Watchlist unavailable",
+                description: "This demo profile is not connected to a user record yet.",
+                type: "error",
+              });
+              return;
+            }
+            try {
+              setWatchlistOverride(!isInWatchlist);
+              if (isInWatchlist) {
+                await removeFromWatchlist.mutateAsync(reviewedUserId);
+              } else {
+                await addToWatchlist.mutateAsync(reviewedUserId);
+              }
+              toast.add({
+                title: isInWatchlist ? "Removed from watchlist" : "Added to watchlist",
+                description: isInWatchlist
+                  ? `${name} was removed from your watchlist.`
+                  : `${name} will now appear in your watchlist.`,
+                type: "success",
+              });
+            } catch (error) {
+              setWatchlistOverride(null);
+              toast.add({ title: "Could not update watchlist", description: error instanceof Error ? error.message : "Please try again.", type: "error" });
+            }
+          }}
+        >
+          <BookmarkSimpleIcon weight={isInWatchlist ? "fill" : "regular"} aria-hidden="true" />
         </Button>
         <ReviewDialog
           reviewedUserId={reviewedUserId ?? "demo-user-id"}

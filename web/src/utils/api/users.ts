@@ -86,3 +86,19 @@ export async function getUser(accessToken: string): Promise<User> {
   });
   return response.user;
 }
+
+export type UsersResponse = {
+  users: User[];
+  nextCursor: string | null;
+};
+
+export async function getUsers(options: {
+  limit?: number;
+  cursor?: string;
+} = {}): Promise<UsersResponse> {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.cursor) params.set("cursor", options.cursor);
+  const query = params.toString();
+  return api<UsersResponse>(`/users${query ? `?${query}` : ""}`);
+}
