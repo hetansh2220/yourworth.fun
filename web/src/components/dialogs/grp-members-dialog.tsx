@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { XIcon } from "@phosphor-icons/react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -18,6 +18,7 @@ export type GroupMember = {
     id: string;
     name: string;
     initials: string;
+    avatar?: string | null;
 };
 
 export default function GrpMembersDialog({
@@ -65,6 +66,9 @@ export default function GrpMembersDialog({
                             className="flex items-center gap-3 rounded-lg p-2 hover:bg-muted/50"
                         >
                             <Avatar>
+                                {member.avatar ? (
+                                    <AvatarImage src={member.avatar} alt="" />
+                                ) : null}
                                 <AvatarFallback>
                                     {member.initials}
                                 </AvatarFallback>

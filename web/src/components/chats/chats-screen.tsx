@@ -1,145 +1,172 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeftIcon, UsersIcon } from "@phosphor-icons/react";
+import { useChatMembers, useChats, useMessages } from "@/hooks/use-chats";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ChatComposer } from "@/components/chats/chat-composer";
 import {
-  ChatComposer,
-  type ChatAttachment,
-} from "@/components/chats/chat-composer";
-import { ChatMessages } from "@/components/chats/chat-messages";
+  ChatMessages,
+  type ChatMessage,
+} from "@/components/chats/chat-messages";
 import {
   ConversationList,
   type Conversation,
 } from "@/components/chats/conversation-list";
-import { cn } from "@/lib/utils";
 import GrpMembersDialog from "@/components/dialogs/grp-members-dialog";
-
-const initialConversations: Conversation[] = [
-  {
-    id: "olivia",
-    name: "Olivia Rhye",
-    initials: "OR",
-    unread: 0,
-    messages: [
-      {
-        id: "olivia-1",
-        text: "Hey! Have you had a chance to look at the updated dashboard?",
-        outgoing: false,
-        time: "10:24 AM",
-      },
-      {
-        id: "olivia-2",
-        text: "Yes, the token watchlist is looking good. I’m checking the transaction history next.",
-        outgoing: true,
-        time: "10:26 AM",
-      },
-      {
-        id: "olivia-3",
-        text: "Perfect. Let me know what you think when you’ve had a look.",
-        outgoing: false,
-        time: "10:28 AM",
-      },
-    ],
-  },
-  {
-    id: "phoenix",
-    name: "Phoenix Baker",
-    initials: "PB",
-    unread: 2,
-    messages: [
-      {
-        id: "phoenix-1",
-        text: "Hey, are you free to catch up this afternoon?",
-        outgoing: false,
-        time: "9:41 AM",
-      },
-      {
-        id: "phoenix-2",
-        text: "I have a few ideas for the earnings screen.",
-        outgoing: false,
-        time: "9:42 AM",
-      },
-    ],
-  },
-  {
-    id: "lana",
-    name: "Lana Steiner",
-    initials: "LS",
-    unread: 0,
-    messages: [
-      {
-        id: "lana-1",
-        text: "Thanks for sharing the update!",
-        outgoing: false,
-        time: "9:15 AM",
-      },
-      {
-        id: "lana-2",
-        text: "Of course. I’ll send the next version over once it’s ready.",
-        outgoing: true,
-        time: "9:18 AM",
-      },
-    ],
-  },
-  {
-    id: "demi",
-    name: "Demi Wilkinson",
-    initials: "DW",
-    unread: 1,
-    messages: [
-      {
-        id: "demi-1",
-        text: "Let’s review the new screens together tomorrow.",
-        outgoing: false,
-        time: "8:52 AM",
-      },
-    ],
-  },
-  { id: "noah", name: "Noah Williams", initials: "NW", unread: 0, messages: [] },
-  { id: "maya", name: "Maya Patel", initials: "MP", unread: 0, messages: [] },
-  { id: "ethan", name: "Ethan Brooks", initials: "EB", unread: 0, messages: [] },
-  { id: "sophia", name: "Sophia Chen", initials: "SC", unread: 0, messages: [] },
-];
+import { cn } from "@/lib/utils";
+import { usePrivy } from "@privy-io/react-auth";
+import { useRef } from "react";
+import { useProfile } from "@/hooks/use-profile";
 
 export function ChatsScreen() {
-  const [conversations, setConversations] = useState(initialConversations);
-  const [selectedId, setSelectedId] = useState(initialConversations[0].id);
+  const { data: chats = [], isLoading, isError } = useChats();
+  const conversations: Conversation[] = chats.map((chat) => ({
+    id: chat.id,
+    name: chat.type === "GROUP" ? "Group chat" : "Direct message",
+    initials: chat.type === "GROUP" ? "GR" : "DM",
+    unread: 0,
+    messages: [],
+  }));
+  const [selectedId, setSelectedId] = useState<string>();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [showThread, setShowThread] = useState(false);
-  const selected = conversations.find(
-    (conversation) => conversation.id === selectedId,
-  )!;
+  const socketRef = useRef<WebSocket | null>(null);
+  const { getAccessToken } = usePrivy();
+  const { data: profile } = useProfile();
+  const activeId = selectedId ?? conversations[0]?.id;
+  const selected = conversations.find((chat) => chat.id === activeId);
+  const { data: chatMembers = [] } = useChatMembers(activeId);
+  const dialogMembers = chatMembers.map((member) => ({
+    id: member.id,
+    name: member.name,
+    avatar: member.avatar,
+    initials: member.name.slice(0, 2).toUpperCase(),
+  }));
+  const { data: messageResponse } = useMessages(activeId);
+  const loadedMessages: ChatMessage[] = (messageResponse?.messages ?? []).map(
+    (message) => ({
+      id: message.id,
+      text: message.content,
+      outgoing: message.senderId === profile?.id,
+      senderName: message.sender.name,
+      senderInitials: message.sender.name.slice(0, 2).toUpperCase(),
+      senderAvatar: message.senderId === profile?.id ? profile.avatar : message.sender.avatar,
+      time: new Date(message.createdAt).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    }),
+  );
+  const displayMessages = messages.length > 0 ? messages : loadedMessages;
+
+  useEffect(() => {
+    if (!activeId) return;
+
+    let disposed = false;
+
+    async function connect() {
+      const token = await getAccessToken();
+
+      if (!token || disposed) return;
+
+      const socket = new WebSocket(
+        `ws://localhost:8080/chats/${activeId}/ws`,
+      );
+
+      socketRef.current = socket;
+
+      socket.onopen = () => {
+        console.log("Connected");
+
+        socket.send(
+          JSON.stringify({
+            type: "subscribe",
+            chatId: activeId,
+            token,
+          }),
+        );
+      };
+
+      socket.onmessage = (event) => handleSocketMessage(event);
+
+      socket.onerror = () => handleSocketError();
+    }
+
+    void connect();
+
+    return () => {
+      disposed = true;
+      socketRef.current?.close();
+      socketRef.current = null;
+    };
+  }, [activeId, getAccessToken]);
+
+  function handleSocketMessage(event: MessageEvent) {
+    const payload = JSON.parse(event.data) as {
+      channel?: string;
+      data:
+        | Array<{ id: string; senderId: string; content: string; createdAt: string; sender?: { name: string; avatar: string | null } }>
+        | { id: string; senderId: string; content: string; createdAt: string; sender?: { name: string; avatar: string | null } };
+      message?: string;
+    };
+
+    if (payload.channel === "history") {
+      if (!Array.isArray(payload.data)) return;
+      const historyMessages: ChatMessage[] = payload.data.map((message) => ({
+        id: message.id,
+        text: message.content,
+        outgoing: message.senderId === profile?.id,
+        senderName: message.sender?.name,
+        senderInitials: message.sender?.name.slice(0, 2).toUpperCase(),
+        senderAvatar: message.senderId === profile?.id ? profile.avatar : message.sender?.avatar,
+        time: new Date(message.createdAt).toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      }));
+      setMessages(historyMessages);
+    }
+
+    if (payload.channel === "message" && !Array.isArray(payload.data)) {
+      const newMessage: ChatMessage = {
+        id: payload.data.id,
+        text: payload.data.content,
+        outgoing: payload.data.senderId === profile?.id,
+        time: new Date(payload.data.createdAt).toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        senderName: payload.data.sender?.name,
+        senderInitials: payload.data.sender?.name?.slice(0, 2).toUpperCase(),
+        senderAvatar: payload.data.senderId === profile?.id ? profile.avatar : payload.data.sender?.avatar,
+      };
+      setMessages((prevMessages) => [...prevMessages, newMessage]);
+    }
+
+    if (payload.channel === "error") {
+      console.error("WebSocket error:", payload.message);
+    }
+  }
+
+  function handleSocketError() {
+    console.error("Chat connection failed");
+  }
+
+  function sendMessage(text: string) {
+    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+      console.error("Chat socket is not connected");
+      return;
+    }
+
+    socketRef.current.send(JSON.stringify({ content: text }));
+  }
 
   function selectConversation(id: string) {
     setSelectedId(id);
     setShowThread(true);
-    setConversations((current) =>
-      current.map((conversation) =>
-        conversation.id === id ? { ...conversation, unread: 0 } : conversation,
-      ),
-    );
-  }
-
-  function sendMessage(text: string, attachments: ChatAttachment[]) {
-    const message = {
-      id: crypto.randomUUID(),
-      text,
-      attachments,
-      outgoing: true,
-      time: new Intl.DateTimeFormat("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-      }).format(new Date()),
-    };
-    setConversations((current) =>
-      current.map((conversation) =>
-        conversation.id === selectedId
-          ? { ...conversation, messages: [...conversation.messages, message] }
-          : conversation,
-      ),
-    );
   }
 
   return (
@@ -153,15 +180,15 @@ export function ChatsScreen() {
         >
           <ConversationList
             conversations={conversations}
-            selectedId={selectedId}
+            selectedId={activeId ?? ""}
             onSelect={selectConversation}
           />
         </aside>
+
         <section
-          aria-label={`Chat with ${selected.name}`}
           className={cn(
             "min-h-0 min-w-0 flex-col bg-background md:flex",
-            showThread ? "flex" : "hidden",
+            showThread ? "flex" : "hidden md:flex",
           )}
         >
           <header className="flex h-16 shrink-0 items-center gap-3 border-b border-white/5 bg-card/60 px-4">
@@ -175,27 +202,61 @@ export function ChatsScreen() {
               <ArrowLeftIcon aria-hidden="true" />
             </Button>
             <Avatar>
-              <AvatarFallback className="bg-muted text-foreground">{selected.initials}</AvatarFallback>
+              <AvatarFallback className="bg-muted text-foreground">
+                {selected?.initials ?? "—"}
+              </AvatarFallback>
             </Avatar>
             <h2 className="min-w-0 flex-1 truncate font-medium">
-              {selected.name}
+              {selected?.name ?? "Chats"}
             </h2>
-            <GrpMembersDialog members={conversations}>
-              <Button variant="ghost" className="gap-2 text-muted-foreground hover:text-foreground" aria-label={`View ${conversations.length} group members`}>
-                <UsersIcon aria-hidden="true" />
-                <span className="tabular-nums">{conversations.length}</span>
-              </Button>
-            </GrpMembersDialog>
+            {selected && (
+              <GrpMembersDialog members={dialogMembers}>
+                <Button
+                  variant="ghost"
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                  aria-label={`View ${dialogMembers.length} members`}
+                >
+                  <UsersIcon aria-hidden="true" />
+                  <span>{dialogMembers.length}</span>
+                </Button>
+              </GrpMembersDialog>
+            )}
           </header>
-          <div className="min-h-0 flex-1">
-            <ChatMessages
-              key={selected.id}
-              messages={selected.messages}
-              name={selected.name}
-              initials={selected.initials}
-            />
-          </div>
-          <ChatComposer key={selected.id} onSend={sendMessage} />
+
+          {isLoading ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+              Loading chats…
+            </div>
+          ) : isError ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-destructive">
+              Could not load chats.
+            </div>
+          ) : selected ? (
+            <>
+              <div className="min-h-0 flex-1">
+                <ChatMessages
+                  key={selected.id}
+                  messages={displayMessages}
+                  name={selected.name}
+                  initials={selected.initials}
+                />
+              </div>
+              <ChatComposer
+                key={selected.id}
+                onSend={(text) => sendMessage(text)}
+              />
+            </>
+          ) : (
+            <div className="flex flex-1 items-center justify-center p-6">
+              <div className="max-w-sm space-y-2 text-center">
+                <p className="font-medium">Your chats will appear here</p>
+                <p className="text-sm text-muted-foreground">
+                  Start a conversation with a creator to see your messages in
+                  this space.
+                </p>
+              </div>
+            </div>
+          )}
         </section>
       </Card>
     </main>
