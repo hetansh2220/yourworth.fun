@@ -8,6 +8,7 @@ import { marketsRoute } from "@/routes/markets.route";
 import { chatsRoute } from "@/routes/chats.route";
 import type { AppEnv } from "@/types/app";
 import { cors } from "hono/cors";
+import { websocket } from "@hono/bun";
 import { setWebSocketServer } from "@/lib/websocket";
 
 const app = new Hono<AppEnv>();
@@ -37,8 +38,9 @@ app.get("/:token", getUserByToken);
 
 export default {
   port: 8080,
+  websocket,
   fetch(req: Request, server: Bun.Server<unknown>) {
     setWebSocketServer(server);
-    return app.fetch(req);
+    return app.fetch(req, server);
   },
 };
