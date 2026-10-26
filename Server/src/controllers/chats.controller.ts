@@ -122,6 +122,7 @@ export async function getMessages(c: Context<AppEnv>) {
 export const chatWebSocket = upgradeWebSocket((c: Context<AppEnv>) => {
   const routeChatId = c.req.param("chatId");
   let senderId: string | undefined;
+  let sender: Pick<typeof users.$inferSelect, "id" | "name" | "username" | "avatar"> | undefined;
   let topic: string | undefined;
   let authenticating = false;
   let closed = false;
@@ -181,7 +182,10 @@ export const chatWebSocket = upgradeWebSocket((c: Context<AppEnv>) => {
             return;
           }
           const [membership] = await db
-            .select({ userId: chatMembers.userId })
+            .select({
+              userId: chatMembers.userId,
+              sender: { id: users.id, name: users.name, username: users.username, avatar: users.avatar },
+            })
             .from(chatMembers)
             .innerJoin(users, eq(chatMembers.userId, users.id))
             .where(
@@ -198,6 +202,7 @@ export const chatWebSocket = upgradeWebSocket((c: Context<AppEnv>) => {
           if (closed || ws.readyState !== 1) return;
 
           senderId = membership.userId;
+          sender = membership.sender;
           topic = chatTopic(parsed.data.chatId);
           (ws.raw as Bun.ServerWebSocket<BunWebSocketData>).subscribe(topic);
           clearTimeout(timeout);
@@ -260,7 +265,7 @@ export const chatWebSocket = upgradeWebSocket((c: Context<AppEnv>) => {
           .update(chats)
           .set({ updatedAt: message.createdAt })
           .where(eq(chats.id, routeChatId!));
-        publishMessage(routeChatId!, message);
+        publishMessage(routeChatId!, { ...message, sender });
       } catch {
         if (!closed && ws.readyState === 1) {
           ws.send(
@@ -305,7 +310,7 @@ export async function createDM(c: Context<AppEnv>) {
       return c.json({ success: false, message: "Unauthorized" }, 401);
 
     const [sender] = await db
-      .select({ id: users.id })
+      .select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar })
       .from(users)
       .where(eq(users.address, address))
       .limit(1);
@@ -361,8 +366,9 @@ export async function createDM(c: Context<AppEnv>) {
       ]);
       const message = savedMessages[0];
       if (!message) throw new Error("Message was not saved");
-      publishMessage(existingChat.id, message);
-      return c.json({ success: true, chat: updatedChats[0], message }, 200);
+      const messageWithSender = { ...message, sender };
+      publishMessage(existingChat.id, messageWithSender);
+      return c.json({ success: true, chat: updatedChats[0], message: messageWithSender }, 200);
     }
 
     // Use the database-generated ID for both memberships in one atomic statement.
@@ -394,8 +400,9 @@ export async function createDM(c: Context<AppEnv>) {
 
     const created = result.rows[0];
     if (!created) throw new Error("DM was not created");
-    publishMessage(created.chat.id, created.message);
-    return c.json({ success: true, ...created }, 201);
+    const messageWithSender = { ...created.message, sender };
+    publishMessage(created.chat.id, messageWithSender);
+    return c.json({ success: true, chat: created.chat, message: messageWithSender }, 201);
   } catch (error) {
     console.error("Create DM error:", error);
     return c.json({ success: false, message: "Failed to create DM" }, 500);
