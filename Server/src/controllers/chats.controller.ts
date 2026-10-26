@@ -19,6 +19,11 @@ const subscribeSchema = z.object({
 
 const messageSchema = z.object({ content: z.string().trim().min(1).max(2000) });
 
+const createDMSchema = z.object({
+  userId: z.string().uuid(),
+  message: messageSchema.shape.content,
+});
+
 export async function getMyChats(c: Context<AppEnv>) {
   try {
     const [user] = await db
@@ -35,7 +40,11 @@ export async function getMyChats(c: Context<AppEnv>) {
     }
 
     const rows = await db
-      .select({ ...getTableColumns(chats), lastReadAt: chatMembers.lastReadAt })
+      .select({
+        ...getTableColumns(chats),
+        lastReadAt: chatMembers.lastReadAt,
+        membersCount: db.$count(chatMembers, eq(chatMembers.chatId, chats.id)),
+      })
       .from(chatMembers)
       .innerJoin(chats, eq(chatMembers.chatId, chats.id))
       .where(eq(chatMembers.userId, user.id))
@@ -66,6 +75,32 @@ export async function getChatById(c: Context<AppEnv>) {
   } catch (error) {
     console.error("Get chat error:", error);
     return c.json({ success: false, message: "Failed to retrieve chat" }, 500);
+  }
+}
+
+export async function getMembers(c: Context<AppEnv>) {
+  try {
+    // chatMemberMiddleware verifies membership and sets chatId.
+    const members = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        avatar: users.avatar,
+        joinedAt: chatMembers.joinedAt,
+      })
+      .from(chatMembers)
+      .innerJoin(users, eq(chatMembers.userId, users.id))
+      .where(eq(chatMembers.chatId, c.get("chatId")))
+      .orderBy(chatMembers.joinedAt, chatMembers.id);
+
+    return c.json({ success: true, members });
+  } catch (error) {
+    console.error("Get chat members error:", error);
+    return c.json(
+      { success: false, message: "Failed to retrieve chat members" },
+      500,
+    );
   }
 }
 
@@ -122,7 +157,9 @@ export async function getMessages(c: Context<AppEnv>) {
 export const chatWebSocket = upgradeWebSocket((c: Context<AppEnv>) => {
   const routeChatId = c.req.param("chatId");
   let senderId: string | undefined;
-  let sender: Pick<typeof users.$inferSelect, "id" | "name" | "username" | "avatar"> | undefined;
+  let sender:
+    | Pick<typeof users.$inferSelect, "id" | "name" | "username" | "avatar">
+    | undefined;
   let topic: string | undefined;
   let authenticating = false;
   let closed = false;
@@ -184,7 +221,12 @@ export const chatWebSocket = upgradeWebSocket((c: Context<AppEnv>) => {
           const [membership] = await db
             .select({
               userId: chatMembers.userId,
-              sender: { id: users.id, name: users.name, username: users.username, avatar: users.avatar },
+              sender: {
+                id: users.id,
+                name: users.name,
+                username: users.username,
+                avatar: users.avatar,
+              },
             })
             .from(chatMembers)
             .innerJoin(users, eq(chatMembers.userId, users.id))
@@ -286,11 +328,6 @@ export const chatWebSocket = upgradeWebSocket((c: Context<AppEnv>) => {
   };
 });
 
-const createDMSchema = z.object({
-  userId: z.string().uuid(),
-  message: messageSchema.shape.content,
-});
-
 /** Authenticated body: { userId: recipientUserId, message }. */
 export async function createDM(c: Context<AppEnv>) {
   const parsed = createDMSchema.safeParse(await c.req.json().catch(() => null));
@@ -310,7 +347,12 @@ export async function createDM(c: Context<AppEnv>) {
       return c.json({ success: false, message: "Unauthorized" }, 401);
 
     const [sender] = await db
-      .select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar })
+      .select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        avatar: users.avatar,
+      })
       .from(users)
       .where(eq(users.address, address))
       .limit(1);
@@ -368,7 +410,10 @@ export async function createDM(c: Context<AppEnv>) {
       if (!message) throw new Error("Message was not saved");
       const messageWithSender = { ...message, sender };
       publishMessage(existingChat.id, messageWithSender);
-      return c.json({ success: true, chat: updatedChats[0], message: messageWithSender }, 200);
+      return c.json(
+        { success: true, chat: updatedChats[0], message: messageWithSender },
+        200,
+      );
     }
 
     // Use the database-generated ID for both memberships in one atomic statement.
@@ -402,7 +447,10 @@ export async function createDM(c: Context<AppEnv>) {
     if (!created) throw new Error("DM was not created");
     const messageWithSender = { ...created.message, sender };
     publishMessage(created.chat.id, messageWithSender);
-    return c.json({ success: true, chat: created.chat, message: messageWithSender }, 201);
+    return c.json(
+      { success: true, chat: created.chat, message: messageWithSender },
+      201,
+    );
   } catch (error) {
     console.error("Create DM error:", error);
     return c.json({ success: false, message: "Failed to create DM" }, 500);
