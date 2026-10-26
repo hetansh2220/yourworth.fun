@@ -4,6 +4,7 @@ import { desc, eq, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { createUserSchema, updateUserSchema, users } from "@/db/schema";
 import type { AppEnv } from "@/types/app";
+import { getBalance as getUsdcBalance } from "@/helpers/solana.helpers";
 
 function getErrorCode(error: unknown) {
   return typeof error === "object" &&
@@ -408,6 +409,25 @@ export async function updateUser(c: Context<AppEnv>) {
         success: false,
         message: "Failed to update user",
       },
+      500,
+    );
+  }
+}
+
+/** Returns the authenticated wallet's USDC balance. */
+export async function getUserBalance(c: Context<AppEnv>) {
+  const address = c.get("walletAddress");
+  if (!address) {
+    return c.json({ success: false, message: "Unauthorized" }, 401);
+  }
+
+  try {
+    const balance = await getUsdcBalance(address);
+    return c.json({ success: true, balance }, 200);
+  } catch (error) {
+    console.error("Get USDC balance error:", error);
+    return c.json(
+      { success: false, message: "Failed to retrieve USDC balance" },
       500,
     );
   }

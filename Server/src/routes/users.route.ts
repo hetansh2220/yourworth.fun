@@ -5,6 +5,7 @@ import {
   getMe,
   getUserByToken,
   getUsers,
+  getUserBalance,
   updateUser,
 } from "@/controllers/users.controller";
 import { authMiddleware } from "@/middleware/authMiddleware";
@@ -18,3 +19,4 @@ usersRoute.get("/me", authMiddleware, getMe);
 usersRoute.patch("/me", authMiddleware, updateUser);
 usersRoute.post("/", authMiddleware, createUser);
 usersRoute.get("/:token", getUserByToken);
+usersRoute.get("/balance", authMiddleware, getUserBalance);

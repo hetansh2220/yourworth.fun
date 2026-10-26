@@ -4,6 +4,7 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
+  unpackAccount,
 } from "@solana/spl-token";
 import {
   PublicKey,
@@ -11,7 +12,8 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { PROGRAM_ID } from "@/constants";
+import { PROGRAM_ID, USDC_MINT } from "@/constants";
+import connection from "@/lib/connection";
 import idl from "@/constants/idl.json";
 
 const programId = new PublicKey(PROGRAM_ID);
@@ -166,4 +168,22 @@ export function refundPayment(params: RefundPaymentParams): Transaction {
 /** Returns an unsigned creator payout transaction. The contract requires an unexpired order. */
 export function completePayment(params: CompletePaymentParams): Transaction {
   return settlement(params, params.creator, "release_payment");
+}
+
+/** Returns the wallet's total USDC balance in USDC units (not base units). */
+export async function getBalance(address: string | PublicKey): Promise<number> {
+  const owner = typeof address === "string" ? new PublicKey(address) : address;
+  const accounts = await connection.getTokenAccountsByOwner(
+    owner,
+    { mint: new PublicKey(USDC_MINT) },
+    "confirmed",
+  );
+
+  const amount = accounts.value.reduce(
+    (total, account) =>
+      total + unpackAccount(account.pubkey, account.account).amount,
+    0n,
+  );
+
+  return Number(amount) / 1_000_000;
 }
