@@ -5,6 +5,7 @@ import { usersRoute } from "@/routes/users.route";
 import { watchlistRoute } from "@/routes/watchlist.route";
 import { reviewsRoute } from "@/routes/reviews.route";
 import { marketsRoute } from "@/routes/markets.route";
+import { socialsRoute } from "@/routes/socials.route";
 import { chatsRoute } from "@/routes/chats.route";
 import type { AppEnv } from "@/types/app";
 import { cors } from "hono/cors";
@@ -34,6 +35,7 @@ app.route("/watchlist", watchlistRoute);
 app.route("/reviews", reviewsRoute);
 app.route("/markets", marketsRoute);
 app.route("/chats", chatsRoute);
+app.route("/socials", socialsRoute);
 app.get("/:token", getUserByToken);
 
 export default {
