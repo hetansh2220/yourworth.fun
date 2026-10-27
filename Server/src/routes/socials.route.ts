@@ -17,6 +17,6 @@ export const socialsRoute = new Hono<AppEnv>();
 socialsRoute.get("/", authMiddleware, getMySocials);
 socialsRoute.post("/", authMiddleware, createSocials);
 socialsRoute.patch("/", authMiddleware, updateSocials);
-socialsRoute.post("/twitter/connect", authMiddleware, connectTwitter);
+socialsRoute.get("/twitter/connect", authMiddleware, connectTwitter);
 socialsRoute.post("/twitter/callback", authMiddleware, twitterCallback);
 socialsRoute.get("/:userId", getSocials);
