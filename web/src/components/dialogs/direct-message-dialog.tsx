@@ -5,8 +5,11 @@ import { XIcon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useCreateDM } from "@/hooks/use-chats";
+import { useRouter } from "next/navigation";
 
-export function DirectMessageDialog({ username, minutePrice, messagePrice, minutesOwned = 0, children }: {
+export function DirectMessageDialog({ userId, username, minutePrice, messagePrice, minutesOwned = 0, children }: {
+  userId: string;
   username: string;
   minutePrice: number;
   messagePrice: number;
@@ -17,6 +20,8 @@ export function DirectMessageDialog({ username, minutePrice, messagePrice, minut
   const [notice, setNotice] = useState("");
   const id = useId();
   const requiredMinutes = minutePrice > 0 ? Math.ceil(messagePrice / minutePrice * 100) / 100 : null;
+  const createDM = useCreateDM();
+  const router = useRouter();
 
   return (
     <Dialog>
@@ -40,7 +45,21 @@ export function DirectMessageDialog({ username, minutePrice, messagePrice, minut
         <form className="space-y-5" onSubmit={(event) => {
           event.preventDefault();
           if (!message.trim()) return;
-          setNotice("Messaging is not connected yet. Your message has not been sent.");
+          if (!userId) {
+            setNotice("This profile is not available yet.");
+            return;
+          }
+
+          createDM.mutate(
+            { userId, message: message.trim() },
+            {
+              onSuccess: ({ chat }) => {
+                setMessage("");
+                router.push(`/chats?chatId=${encodeURIComponent(chat.id)}`);
+              },
+              onError: (error) => setNotice(error.message),
+            },
+          );
         }}>
           <div className="relative">
             <label htmlFor={id} className="sr-only">Message for {username}</label>
@@ -58,7 +77,9 @@ export function DirectMessageDialog({ username, minutePrice, messagePrice, minut
             </div>
           </dl>
           {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
-          <Button type="submit" className="h-11 w-full text-base" disabled={!message.trim() || requiredMinutes === null}>Submit</Button>
+          <Button type="submit" className="h-11 w-full text-base" disabled={!message.trim() || requiredMinutes === null || createDM.isPending}>
+            {createDM.isPending ? "Sending…" : "Submit"}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

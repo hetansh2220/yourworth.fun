@@ -1,9 +1,12 @@
+"use client";
+
 import { DirectMessageDialog } from "@/components/dialogs/direct-message-dialog";
 import { GroupChatDialog } from "@/components/dialogs/group-chat-dialog";
 import type { ReactNode } from "react";
 import { ChatCircleDotsIcon, ChatsTeardropIcon, ShieldCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { useUsers } from "@/hooks/use-profile";
 
 function AccessCard({ icon, title, description, children }: {
   icon: ReactNode;
@@ -36,13 +39,16 @@ export function ProfileOverview({ username, minutePrice = 0.12, messagePrice = 1
   requiredMinutes?: number;
   memberCount?: number;
 }) {
+  const { data } = useUsers();
+  const profile = data?.users.find((user) => user.username === username);
+
   return (
     <section aria-labelledby="profile-overview-heading" className="space-y-4">
       <div className="space-y-2">
         <h2 id="profile-overview-heading" className="text-2xl font-medium">Get access to {username}</h2>
         <p className="text-base text-muted-foreground">Use your purchased minutes to connect with {username}</p>
       </div>
-      <DirectMessageDialog username={username} minutePrice={minutePrice} messagePrice={messagePrice}>
+      <DirectMessageDialog userId={profile?.id ?? ""} username={username} minutePrice={minutePrice} messagePrice={messagePrice}>
       <AccessCard
         icon={<ChatCircleDotsIcon size={26} aria-hidden="true" />}
         title="Direct Message"
