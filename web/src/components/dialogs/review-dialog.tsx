@@ -76,7 +76,10 @@ export function ReviewDialog({
             }}
         >
             {children ? (
-                <DialogTrigger render={<span className="cursor-pointer" />}>
+                <DialogTrigger
+                    nativeButton={false}
+                    render={<span className="cursor-pointer" />}
+                >
                     {children}
                 </DialogTrigger>
             ) : (

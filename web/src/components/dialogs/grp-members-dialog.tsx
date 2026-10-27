@@ -30,7 +30,10 @@ export default function GrpMembersDialog({
 }) {
     return (
         <Dialog>
-            <DialogTrigger render={<span className="contents" />}>
+            <DialogTrigger
+                nativeButton={false}
+                render={<span className="contents" />}
+            >
                 {children}
             </DialogTrigger>
             <DialogContent
