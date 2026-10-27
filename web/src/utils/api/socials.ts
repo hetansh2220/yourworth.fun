@@ -16,6 +16,14 @@ export type SocialsInput = {
   youtubeUsername?: string;
 };
 
+export async function connectTwitter(accessToken: string) {
+  const response = await api<{ url: string }>("/socials/twitter/connect", {
+    method: "GET",
+    accessToken,
+  });
+  return response.url;
+}
+
 export async function createSocials(accessToken: string, input: SocialsInput) {
   const response = await api<{ socials: Socials }>("/socials", {
     method: "POST",

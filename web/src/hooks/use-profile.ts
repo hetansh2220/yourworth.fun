@@ -23,6 +23,7 @@ import {
     type UsersResponse,
 } from "@/utils/api/users";
 import {
+    connectTwitter,
     createSocials,
     getMySocials,
     getSocials,
@@ -105,6 +106,20 @@ export function useUpdateSocials() {
         onSuccess: (socials) => queryClient.setQueryData(socialsQueryKey, socials),
     });
 }
+
+export function useConnectTwitter() {
+    const { getAccessToken } = usePrivy();
+
+    return useMutation<string, Error, void>({
+        mutationFn: async () => {
+            const accessToken = await getAccessToken();
+            if (!accessToken) throw missingTokenError();
+            return connectTwitter(accessToken);
+        },
+        onSuccess: (url) => window.location.assign(url),
+    });
+}
+
 
 export function isProfileNotFound(error: unknown): error is ApiError {
     return error instanceof ApiError && error.status === 404;

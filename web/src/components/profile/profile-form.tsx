@@ -7,8 +7,10 @@ import {
   useCreateProfile,
   useUpdateProfile,
   useUsernameAvailability,
+  useConnectTwitter,
+  useMySocials,
 } from "@/hooks/use-profile";
-import { PencilSimpleIcon } from "@phosphor-icons/react";
+import { PencilSimpleIcon, XLogoIcon } from "@phosphor-icons/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +30,9 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
   const { ready, authenticated, login } = usePrivy();
   const createProfile = useCreateProfile();
   const updateProfile = useUpdateProfile();
+  const connectTwitterMutation = useConnectTwitter();
+  const { data: socials } = useMySocials();
+  const twitterConnected = Boolean(socials?.twitterUsername);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const startingProfile =
@@ -240,6 +245,22 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                     </Button>
                   }
                 </div>
+                {!isCreate && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-fit"
+                    disabled={twitterConnected || connectTwitterMutation.isPending}
+                    onClick={() => connectTwitterMutation.mutate()}
+                  >
+                    {twitterConnected
+                      ? "Connected"
+                      : connectTwitterMutation.isPending
+                      ? "Connecting…"
+                      : "Connect"}
+                    <XLogoIcon aria-hidden="true" />
+                  </Button>
+                )}
                 <div className="space-y-2">
                   <input
                     ref={fileRef}
