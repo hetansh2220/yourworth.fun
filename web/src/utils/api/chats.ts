@@ -41,6 +41,16 @@ export type MessagesResponse = {
   offset: number;
 };
 
+export type CreateDMInput = {
+  userId: string;
+  message: string;
+};
+
+export type CreateDMResponse = {
+  chat: Chat;
+  message: ChatMessage;
+};
+
 
 export async function getChats(accessToken: string): Promise<Chat[]> {
   const response = await api<{ chats: Chat[] }>("/chats", {
@@ -88,4 +98,16 @@ export async function getChatMembers(
     `/chats/${encodeURIComponent(chatId)}/members`,
     { accessToken },
   );
+}
+
+export async function createDM(
+  accessToken: string,
+  input: CreateDMInput,
+): Promise<CreateDMResponse> {
+  return api<CreateDMResponse>("/chats/dm", {
+    method: "POST",
+    accessToken,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }

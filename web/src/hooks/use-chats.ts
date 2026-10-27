@@ -2,10 +2,13 @@
 
 import {
   useQuery,
+  useMutation,
+  useQueryClient,
   type UseQueryOptions,
 } from "@tanstack/react-query";
 import { usePrivy } from "@privy-io/react-auth";
 import {
+  createDM,
   getChat,
   getChats,
   getMessages,
@@ -13,6 +16,8 @@ import {
   type Chat,
   type ChatParticipant,
   type MessagesResponse,
+  type CreateDMInput,
+  type CreateDMResponse,
 } from "@/utils/api/chats";
 
 export const chatsQueryKey = ["chats"] as const;
@@ -110,6 +115,22 @@ export function useChatMembers(
       if (!accessToken || !chatId) throw missingTokenError();
       const response = await getChatMembers(accessToken, chatId);
       return response.members;
+    },
+  });
+}
+
+export function useCreateDM() {
+  const { getAccessToken } = usePrivy();
+  const queryClient = useQueryClient();
+
+  return useMutation<CreateDMResponse, Error, CreateDMInput>({
+    mutationFn: async (input) => {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw missingTokenError();
+      return createDM(accessToken, input);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: chatsQueryKey });
     },
   });
 }
