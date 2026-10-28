@@ -10,6 +10,8 @@ export type Chat = {
   updatedAt: string;
   lastReadAt: string | null;
   membersCount: number;
+  name: string | null;
+  avatar: string | null;
 };
 
 export type ChatParticipant = {
