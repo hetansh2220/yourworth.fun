@@ -9,6 +9,7 @@ import type { ChatMessage } from "@/components/chats/chat-messages";
 
 export type Conversation = {
   id: string;
+  type: "DM" | "GROUP";
   name: string;
   initials: string;
   avatar?: string | null;

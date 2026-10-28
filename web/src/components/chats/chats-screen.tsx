@@ -28,6 +28,7 @@ export function ChatsScreen() {
   }, [chats]);
   const conversations: Conversation[] = chats.map((chat) => ({
     id: chat.id,
+    type: chat.type,
     name: chat.name ?? (chat.type === "GROUP" ? "Group chat" : "Direct message"),
     avatar: chat.avatar,
     initials: (chat.name ?? (chat.type === "GROUP" ? "Group chat" : "Direct message"))
@@ -220,7 +221,7 @@ export function ChatsScreen() {
             <h2 className="min-w-0 flex-1 truncate font-medium">
               {selected?.name ?? "Chats"}
             </h2>
-            {selected && (
+            {selected?.type === "GROUP" && (
               <GrpMembersDialog members={dialogMembers}>
                 <Button
                   variant="ghost"
