@@ -16,16 +16,110 @@ import {
     checkUsernameAvailability,
     getUser,
     updateUser,
+    getUsers,
     type CreateUserInput,
     type UpdateUserInput,
     type User,
+    type UsersResponse,
 } from "@/utils/api/users";
+import {
+    connectTwitter,
+    createSocials,
+    getMySocials,
+    getSocials,
+    updateSocials,
+    type Socials,
+    type SocialsInput,
+} from "@/utils/api/socials";
 
 export const profileQueryKey = ["profile", "current"] as const;
+export const usersQueryKey = ["users"] as const;
+export const socialsQueryKey = ["socials", "current"] as const;
+export const userSocialsQueryKey = (userId: string) => ["socials", userId] as const;
+
+export function useUsers(
+    options?: Omit<UseQueryOptions<UsersResponse, Error>, "queryKey" | "queryFn">,
+) {
+    return useQuery({
+        ...options,
+        queryKey: usersQueryKey,
+        queryFn: () => getUsers({ limit: 50 }),
+    });
+}
 
 function missingTokenError() {
     return new Error("Your session is unavailable. Please try again.");
 }
+
+export function useMySocials() {
+    const { ready, authenticated, getAccessToken } = usePrivy();
+
+    return useQuery<Socials | null, Error>({
+        queryKey: socialsQueryKey,
+        enabled: ready && authenticated,
+        queryFn: async () => {
+            const accessToken = await getAccessToken();
+            if (!accessToken) throw missingTokenError();
+            return getMySocials(accessToken);
+        },
+    });
+}
+
+export function useSocials(userId: string | undefined) {
+    const { getAccessToken } = usePrivy();
+
+    return useQuery<Socials | null, Error>({
+        queryKey: userSocialsQueryKey(userId ?? ""),
+        enabled: Boolean(userId),
+        queryFn: async () => {
+            const accessToken = await getAccessToken();
+            if (!accessToken || !userId) throw missingTokenError();
+            return getSocials(accessToken, userId);
+        },
+    });
+}
+
+export function useCreateSocials() {
+    const { getAccessToken } = usePrivy();
+    const queryClient = useQueryClient();
+
+    return useMutation<Socials, Error, SocialsInput>({
+        mutationFn: async (input) => {
+            const accessToken = await getAccessToken();
+            if (!accessToken) throw missingTokenError();
+            return createSocials(accessToken, input);
+        },
+        onSuccess: (socials) => queryClient.setQueryData(socialsQueryKey, socials),
+    });
+}
+
+export function useUpdateSocials() {
+    const { getAccessToken } = usePrivy();
+    const queryClient = useQueryClient();
+
+    return useMutation<Socials, Error, SocialsInput>({
+        mutationFn: async (input) => {
+            const accessToken = await getAccessToken();
+            if (!accessToken) throw missingTokenError();
+            return updateSocials(accessToken, input);
+        },
+        onSuccess: (socials) => queryClient.setQueryData(socialsQueryKey, socials),
+    });
+}
+
+export function useConnectTwitter() {
+    const { getAccessToken } = usePrivy();
+
+    return useMutation<string, Error, void>({
+        mutationFn: async () => {
+            const accessToken = await getAccessToken();
+            if (!accessToken) throw missingTokenError();
+            return connectTwitter(accessToken);
+        },
+        onSuccess: (url) => window.location.assign(url),
+    });
+}
+
 
 export function isProfileNotFound(error: unknown): error is ApiError {
     return error instanceof ApiError && error.status === 404;

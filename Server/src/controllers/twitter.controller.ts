@@ -86,35 +86,26 @@ const profileSchema = z.object({
 
 export async function twitterCallback(c: Context<AppEnv>) {
   c.header("Cache-Control", "no-store");
-  const parsed = callbackSchema.safeParse(await c.req.json().catch(() => null));
+  const parsed = callbackSchema.safeParse({
+    code: c.req.query("code"),
+    state: c.req.query("state"),
+  });
   if (!parsed.success)
-    return c.json({ success: false, message: "Provide code and state" }, 400);
+    return c.text("Invalid Twitter callback", 400);
   try {
     const config = getConfig();
-    const user = await getOwner(c);
-    if (!user)
-      return c.json(
-        { success: false, message: "Create your user profile first" },
-        404,
-      );
     const flow = pending.get(parsed.data.state);
-    if (!flow || flow.expiresAt <= Date.now() || flow.userId !== user.id) {
-      return c.json(
-        {
-          success: false,
-          message: "Invalid or expired Twitter connection. Start again.",
-        },
-        400,
-      );
-    }
+    if (!flow || flow.expiresAt <= Date.now())
+      return c.text("Invalid or expired Twitter connection", 400);
     pending.delete(parsed.data.state);
     const tokenResponse = await fetch("https://api.x.com/2/oauth2/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: `Basic ${Buffer.from(`${encodeURIComponent(config.clientId)}:${encodeURIComponent(config.clientSecret)}`).toString("base64")}`,
+        Authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64")}`,
       },
       body: new URLSearchParams({
+        client_id: config.clientId,
         grant_type: "authorization_code",
         code: parsed.data.code,
         redirect_uri: config.redirectUri,
@@ -143,17 +134,15 @@ export async function twitterCallback(c: Context<AppEnv>) {
     const { data: profile } = profileSchema.parse(await profileResponse.json());
     const [saved] = await db
       .insert(socials)
-      .values({ userId: user.id, twitterUsername: profile.username })
+      .values({ userId: flow.userId, twitterUsername: profile.username })
       .onConflictDoUpdate({
         target: socials.userId,
         set: { twitterUsername: profile.username, updatedAt: new Date() },
       })
       .returning();
-    return c.json({ success: true, socials: saved });
-  } catch {
-    return c.json(
-      { success: false, message: "Failed to connect Twitter. Start again." },
-      500,
-    );
+    return c.redirect("http://localhost:3000/settings/profile?twitter=connected");
+  } catch (error) {
+    console.error("Twitter callback error:", error);
+    return c.text("Failed to connect Twitter. Start again.", 500);
   }
 }

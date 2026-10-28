@@ -10,6 +10,8 @@ type ProfilePageProps = {
   params: Promise<{ username: string }>;
 };
 
+export const instant = false;
+
 async function getUsername(params: ProfilePageProps["params"]) {
   const { username } = await params;
   if (

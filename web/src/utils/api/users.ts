@@ -4,7 +4,7 @@ export type User = {
   id: string;
   privyUserId: string;
   username: string;
-  displayName: string;
+  name: string;
   walletAddress: string;
   avatar: string;
   bio: string;
@@ -15,14 +15,14 @@ export type User = {
 
 export type CreateUserInput = {
   username: string;
-  displayName: string;
+  name: string;
   bio: string;
   avatar: File | string;
 };
 
 export type UpdateUserInput = {
   username?: string;
-  displayName?: string;
+  name?: string;
   bio?: string;
   /** URL of an uploaded avatar, as required by the update endpoint. */
   avatar?: string;
@@ -43,14 +43,14 @@ export async function createUser(
       ? (() => {
           const formData = new FormData();
           formData.set("username", input.username);
-          formData.set("displayName", input.displayName.trim());
+          formData.set("name", input.name.trim());
           formData.set("bio", input.bio);
           formData.set("avatar", input.avatar);
           return formData;
         })()
       : JSON.stringify({
           username: input.username,
-          displayName: input.displayName.trim(),
+          name: input.name.trim(),
           bio: input.bio,
           avatar: input.avatar,
         });
@@ -85,4 +85,20 @@ export async function getUser(accessToken: string): Promise<User> {
     cache: "no-store",
   });
   return response.user;
+}
+
+export type UsersResponse = {
+  users: User[];
+  nextCursor: string | null;
+};
+
+export async function getUsers(options: {
+  limit?: number;
+  cursor?: string;
+} = {}): Promise<UsersResponse> {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.cursor) params.set("cursor", options.cursor);
+  const query = params.toString();
+  return api<UsersResponse>(`/users${query ? `?${query}` : ""}`);
 }

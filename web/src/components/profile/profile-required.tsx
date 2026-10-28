@@ -48,7 +48,7 @@ export function ProfileRequired({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [ready, authenticated, userId, getAccessToken, router, attempt]);
 
-  if (ready && (!authenticated || (user && profile?.privyUserId === user.id))) {
+  if (ready && (!authenticated || profile !== null)) {
     return <ProfileUpdateContext.Provider value={setProfile}><ProfileContext.Provider value={authenticated ? profile : null}>{children}</ProfileContext.Provider></ProfileUpdateContext.Provider>;
   }
 
