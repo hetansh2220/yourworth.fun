@@ -1,7 +1,7 @@
 import {
   pgTable,
   uuid,
-  integer,
+  numeric,
   text,
   timestamp,
   uniqueIndex,
@@ -28,7 +28,7 @@ export const reviews = pgTable(
       .notNull()
       .references(() => users.id),
 
-    rating: integer("rating")
+    rating: numeric("rating", { precision: 2, scale: 1, mode: "number" })
       .notNull(),
 
     comment: text("comment"),
@@ -50,6 +50,8 @@ export const reviews = pgTable(
       table.reviewerId,
       table.reviewedUserId
     ),
+
+    check("rating_half_star_increment", sql`mod(${table.rating}, 0.5) = 0`),
 
     check(
       "rating_between_1_and_5",

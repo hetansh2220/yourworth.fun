@@ -8,7 +8,7 @@ import type { AppEnv } from "@/types/app";
 
 const idSchema = z.string().uuid();
 const reviewFields = {
-  rating: z.number().int().min(1).max(5),
+  rating: z.number().min(1).max(5).multipleOf(0.5),
   comment: z.string().trim().max(2000).nullable().optional(),
 };
 
