@@ -32,6 +32,7 @@ export function ReviewDialog({
 }: ReviewDialogProps) {
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState("");
+    const [open, setOpen] = useState(false);
     const id = useId();
     const createReview = useCreateReview();
 
@@ -43,7 +44,7 @@ export function ReviewDialog({
 
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!rating) return;
+        if (!rating || !comment.trim()) return;
 
         try {
             await createReview.mutateAsync({
@@ -57,6 +58,7 @@ export function ReviewDialog({
                 type: "success",
             });
             reset();
+            setOpen(false);
         } catch (error) {
             toast.add({
                 title: "Could not submit review",
@@ -71,7 +73,9 @@ export function ReviewDialog({
 
     return (
         <Dialog
+            open={open}
             onOpenChange={(open) => {
+                setOpen(open);
                 if (!open) reset();
             }}
         >
@@ -125,23 +129,28 @@ export function ReviewDialog({
                                     key={value}
                                     type="button"
                                     role="radio"
-                                    aria-checked={rating === value}
-                                    aria-label={`${value} stars`}
-                                    onClick={() => setRating(value)}
-                                    className="rounded-lg p-2 outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-ring"
+                                    aria-checked={rating === value || rating === value - 0.5}
+                                    aria-label={`${value - 0.5} to ${value} stars. Click left half for ${value - 0.5}, right half for ${value}.`}
+                                    onClick={(event) => {
+                                        const { left, width } = event.currentTarget.getBoundingClientRect();
+                                        setRating(event.clientX - left < width / 2 ? value - 0.5 : value);
+                                    }}
+                                    className="relative size-12 rounded-lg p-1 outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-ring"
                                 >
-                                    <StarIcon
-                                        size={44}
-                                        weight={
-                                            value <= rating ? "fill" : "regular"
-                                        }
-                                        className={
-                                            value <= rating
-                                                ? "text-yellow-400"
-                                                : "text-muted-foreground"
-                                        }
-                                        aria-hidden="true"
-                                    />
+                                    <StarIcon size={40} weight="regular" className="text-muted-foreground" aria-hidden="true" />
+                                    <span
+                                        className="pointer-events-none absolute inset-1 overflow-hidden"
+                                        style={{
+                                            clipPath:
+                                                rating === value - 0.5
+                                                    ? "inset(0 50% 0 0)"
+                                                    : rating >= value
+                                                        ? "inset(0)"
+                                                        : "inset(0 100% 0 0)",
+                                        }}
+                                    >
+                                        <StarIcon size={40} weight="fill" className="max-w-none text-yellow-400" aria-hidden="true" />
+                                    </span>
                                 </button>
                             ))}
                         </div>
@@ -155,6 +164,7 @@ export function ReviewDialog({
                             value={comment}
                             onChange={(event) => setComment(event.target.value)}
                             maxLength={2000}
+                            required
                             placeholder="Share your experience"
                             className="min-h-28 resize-y"
                         />
@@ -162,7 +172,7 @@ export function ReviewDialog({
                     <Button
                         type="submit"
                         className="h-11 w-full text-base"
-                        disabled={!rating || createReview.isPending}
+                        disabled={!rating || !comment.trim() || createReview.isPending}
                     >
                         {createReview.isPending
                             ? "Submitting…"
