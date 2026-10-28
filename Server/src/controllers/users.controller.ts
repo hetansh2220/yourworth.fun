@@ -1,10 +1,16 @@
 import type { Context } from "hono";
-import { desc, eq, lt } from "drizzle-orm";
+import { desc, eq, lt, getTableColumns } from "drizzle-orm";
 
 import { db } from "@/db";
-import { createUserSchema, updateUserSchema, users } from "@/db/schema";
+import { createUserSchema, updateUserSchema, users, socials } from "@/db/schema";
 import type { AppEnv } from "@/types/app";
 import { getBalance as getUsdcBalance } from "@/helpers/solana.helpers";
+
+const socialFields = {
+  twitterUsername: socials.twitterUsername,
+  instagramUsername: socials.instagramUsername,
+  youtubeUsername: socials.youtubeUsername,
+};
 
 function getErrorCode(error: unknown) {
   return typeof error === "object" &&
@@ -129,8 +135,9 @@ export async function getMe(c: Context<AppEnv>) {
 
   try {
     const [user] = await db
-      .select()
+      .select({ ...getTableColumns(users), socials: socialFields })
       .from(users)
+      .leftJoin(socials, eq(socials.userId, users.id))
       .where(eq(users.address, walletAddress))
       .limit(1);
 
@@ -186,8 +193,10 @@ export async function getUserByToken(c: Context<AppEnv>) {
         avatar: users.avatar,
         bio: users.bio,
         createdAt: users.createdAt,
+        socials: socialFields,
       })
       .from(users)
+      .leftJoin(socials, eq(socials.userId, users.id))
       .where(eq(users.token, token))
       .limit(1);
 
@@ -236,6 +245,7 @@ export async function getUsers(c: Context<AppEnv>) {
     avatar: users.avatar,
     bio: users.bio,
     createdAt: users.createdAt,
+    socials: socialFields,
   };
 
   try {
@@ -243,12 +253,14 @@ export async function getUsers(c: Context<AppEnv>) {
       ? await db
           .select(publicUserFields)
           .from(users)
+      .leftJoin(socials, eq(socials.userId, users.id))
           .where(lt(users.createdAt, validCursor))
           .orderBy(desc(users.createdAt))
           .limit(limit + 1)
       : await db
           .select(publicUserFields)
           .from(users)
+      .leftJoin(socials, eq(socials.userId, users.id))
           .orderBy(desc(users.createdAt))
           .limit(limit + 1);
 
