@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import type { WSContext } from "hono/ws";
 import privy from "@/lib/privy";
 import { getSolanaEmbeddedWalletAddress } from "@/middleware/authMiddleware";
-import { and, desc, eq, getTableColumns, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, ne, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { chatMembers, chats, messages, users } from "@/db/schema";
@@ -23,6 +23,37 @@ const createDMSchema = z.object({
   userId: z.string().uuid(),
   message: messageSchema.shape.content,
 });
+
+async function withChatProfiles<T extends typeof chats.$inferSelect>(
+  rows: T[],
+  currentUserId: string,
+) {
+  const adminIds = [...new Set(rows.filter((chat) => chat.type === "GROUP").map((chat) => chat.admin))];
+  const dmIds = rows.filter((chat) => chat.type === "DM").map((chat) => chat.id);
+  const [admins, members] = await Promise.all([
+    adminIds.length
+      ? db.select({ id: users.id, name: users.name, avatar: users.avatar })
+          .from(users).where(inArray(users.id, adminIds))
+      : [],
+    dmIds.length
+      ? db.select({ chatId: chatMembers.chatId, name: users.name, avatar: users.avatar })
+          .from(chatMembers)
+          .innerJoin(users, eq(users.id, chatMembers.userId))
+          .where(and(inArray(chatMembers.chatId, dmIds), ne(chatMembers.userId, currentUserId)))
+          .orderBy(chatMembers.joinedAt, chatMembers.id)
+      : [],
+  ]);
+  const adminById = new Map(admins.map((admin) => [admin.id, admin]));
+  const memberByChat = new Map(members.map((member) => [member.chatId, member]));
+  return rows.map((chat) => {
+    const profile = chat.type === "GROUP" ? adminById.get(chat.admin) : memberByChat.get(chat.id);
+    return {
+      ...chat,
+      name: profile ? (chat.type === "GROUP" ? `${profile.name}'s group` : profile.name) : null,
+      avatar: profile?.avatar ?? null,
+    };
+  });
+}
 
 export async function getMyChats(c: Context<AppEnv>) {
   try {
@@ -50,7 +81,7 @@ export async function getMyChats(c: Context<AppEnv>) {
       .where(eq(chatMembers.userId, user.id))
       .orderBy(desc(chats.updatedAt));
 
-    return c.json({ success: true, chats: rows });
+    return c.json({ success: true, chats: await withChatProfiles(rows, user.id) });
   } catch (error) {
     console.error("Get my chats error:", error);
     return c.json({ success: false, message: "Failed to retrieve chats" }, 500);
@@ -71,7 +102,8 @@ export async function getChatById(c: Context<AppEnv>) {
       return c.json({ success: false, message: "Chat not found" }, 404);
     }
 
-    return c.json({ success: true, chat });
+    const [profileChat] = await withChatProfiles([chat], c.get("currentUserId"));
+    return c.json({ success: true, chat: profileChat });
   } catch (error) {
     console.error("Get chat error:", error);
     return c.json({ success: false, message: "Failed to retrieve chat" }, 500);

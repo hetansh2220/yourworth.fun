@@ -81,7 +81,7 @@ const callbackSchema = z.object({
 });
 const tokenSchema = z.object({ access_token: z.string().min(1) });
 const profileSchema = z.object({
-  data: z.object({ id: z.string().min(1), username: z.string().min(1) }),
+  data: z.object({ id: z.string().min(1), username: z.string().min(1), verified: z.boolean() }),
 });
 
 export async function twitterCallback(c: Context<AppEnv>) {
@@ -122,7 +122,7 @@ export async function twitterCallback(c: Context<AppEnv>) {
         502,
       );
     const token = tokenSchema.parse(await tokenResponse.json());
-    const profileResponse = await fetch("https://api.x.com/2/users/me", {
+    const profileResponse = await fetch("https://api.x.com/2/users/me?user.fields=verified", {
       headers: { Authorization: `Bearer ${token.access_token}` },
       signal: AbortSignal.timeout(15000),
     });
@@ -132,14 +132,17 @@ export async function twitterCallback(c: Context<AppEnv>) {
         502,
       );
     const { data: profile } = profileSchema.parse(await profileResponse.json());
-    const [saved] = await db
-      .insert(socials)
-      .values({ userId: flow.userId, twitterUsername: profile.username })
-      .onConflictDoUpdate({
-        target: socials.userId,
-        set: { twitterUsername: profile.username, updatedAt: new Date() },
-      })
-      .returning();
+    await db.batch([
+      db.insert(socials)
+        .values({ userId: flow.userId, twitterUsername: profile.username })
+        .onConflictDoUpdate({
+          target: socials.userId,
+          set: { twitterUsername: profile.username, updatedAt: new Date() },
+        }),
+      db.update(users)
+        .set({ verified: profile.verified, updatedAt: new Date() })
+        .where(eq(users.id, flow.userId)),
+    ]);
     return c.redirect("http://localhost:3000/settings/profile?twitter=connected");
   } catch (error) {
     console.error("Twitter callback error:", error);
