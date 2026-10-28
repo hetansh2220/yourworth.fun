@@ -12,6 +12,7 @@ export type Review = {
     name: string;
     username: string;
     avatar: string;
+    verified: boolean;
   };
 };
 

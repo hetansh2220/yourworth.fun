@@ -130,6 +130,7 @@ export async function getReviews(c: Context<AppEnv>) {
           name: users.name,
           username: users.username,
           avatar: users.avatar,
+          verified: users.verified,
         },
       })
       .from(reviews)

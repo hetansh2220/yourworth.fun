@@ -26,8 +26,6 @@ const changeFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-
-
 export function CryptoWatchlist() {
   const { data, isLoading, isError } = useWatchlist();
 
@@ -36,43 +34,89 @@ export function CryptoWatchlist() {
       <CardHeader>
         <CardTitle>Watchlist</CardTitle>
       </CardHeader>
-      <CardContent>
-        <Table aria-label="Watchlist" className="border-separate border-spacing-0">
+      <CardContent className="max-h-[288px] overflow-y-auto">
+        <Table
+          aria-label="Watchlist"
+          className="border-separate border-spacing-0"
+        >
           <TableBody>
-            {isLoading ? <TableRow><TableCell colSpan={2} className="text-center text-sm text-muted-foreground">Loading watchlist…</TableCell></TableRow> : isError ? <TableRow><TableCell colSpan={2} className="text-center text-sm text-destructive">Could not load watchlist.</TableCell></TableRow> : data?.length ? data.map((entry, index) => {
-              const market = demoMarketData[index % demoMarketData.length];
-              return (
-              <TableRow key={entry.id} className="border-0 hover:bg-transparent hover:[&>td]:bg-muted/50">
-                <TableCell className="rounded-l-md">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={entry.user.avatar} alt={entry.user.name} />
-                      <AvatarFallback>{entry.user.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="flex items-center gap-1 font-medium">
-                        {entry.user.name}
-                        {entry.user.verified ? (
-                          <SealCheckIcon
-                            aria-label="Verified"
-                            weight="fill"
-                            className="size-4 text-sky-400"
-                          />
-                        ) : null}
-                      </p>
-                      <p className="text-xs text-muted-foreground">@{entry.user.username}</p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="rounded-r-md text-right">
-                  <p className="font-medium tabular-nums">{priceFormatter.format(market.price)}</p>
-                  <p className={`text-xs tabular-nums ${market.change > 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {changeFormatter.format(market.change / 100)}
-                  </p>
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={2}
+                  className="text-center text-sm text-muted-foreground"
+                >
+                  Loading watchlist…
                 </TableCell>
               </TableRow>
-              );
-            }) : <TableRow><TableCell colSpan={2} className="py-8 text-center text-sm text-muted-foreground">Your watchlist is empty.</TableCell></TableRow>}
+            ) : isError ? (
+              <TableRow>
+                <TableCell
+                  colSpan={2}
+                  className="text-center text-sm text-destructive"
+                >
+                  Could not load watchlist.
+                </TableCell>
+              </TableRow>
+            ) : data?.length ? (
+              data.map((entry, index) => {
+                const market = demoMarketData[index % demoMarketData.length];
+                return (
+                  <TableRow
+                    key={entry.id}
+                    className="border-0 hover:bg-transparent hover:[&>td]:bg-muted/50"
+                  >
+                    <TableCell className="rounded-l-md">
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage
+                            src={entry.user.avatar}
+                            alt={entry.user.name}
+                          />
+                          <AvatarFallback>
+                            {entry.user.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="flex items-center gap-1 font-medium">
+                            {entry.user.name}
+                            {entry.user.verified ? (
+                              <SealCheckIcon
+                                aria-label="Verified"
+                                weight="fill"
+                                className="size-4 text-sky-400"
+                              />
+                            ) : null}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            @{entry.user.username}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="rounded-r-md text-right">
+                      <p className="font-medium tabular-nums">
+                        {priceFormatter.format(market.price)}
+                      </p>
+                      <p
+                        className={`text-xs tabular-nums ${market.change > 0 ? "text-emerald-400" : "text-red-400"}`}
+                      >
+                        {changeFormatter.format(market.change / 100)}
+                      </p>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={2}
+                  className="py-8 text-center text-sm text-muted-foreground"
+                >
+                  Your watchlist is empty.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </CardContent>

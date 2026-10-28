@@ -43,7 +43,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
         </div>
         <div className="min-w-0 space-y-6">
           <ProfileTradingPanel />
-          <ProfileReviews />
+          <ProfileReviews username={username} />
         </div>
       </div>
     </main>
