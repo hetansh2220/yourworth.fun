@@ -11,6 +11,12 @@ export type User = {
   token: string | null;
   createdAt: string;
   updatedAt: string;
+  verified: boolean;
+  socials: {
+    twitterUsername: string | null;
+    instagramUsername: string | null;
+    youtubeUsername: string | null;
+  } | null;
 };
 
 export type CreateUserInput = {

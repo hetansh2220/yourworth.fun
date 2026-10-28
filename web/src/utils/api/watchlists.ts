@@ -28,6 +28,7 @@ export type WatchlistItem = {
     name: string;
     avatar: string;
     bio: string;
+    verified: boolean;
     token: string | null;
   };
 };

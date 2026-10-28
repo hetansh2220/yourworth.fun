@@ -4,6 +4,7 @@ import { useWatchlist } from "@/hooks/use-watchlist";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 
 const demoMarketData = [
   { price: 67432.8, change: 2.34 },
@@ -49,7 +50,16 @@ export function CryptoWatchlist() {
                       <AvatarFallback>{entry.user.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">{entry.user.name}</p>
+                      <p className="flex items-center gap-1 font-medium">
+                        {entry.user.name}
+                        {entry.user.verified ? (
+                          <SealCheckIcon
+                            aria-label="Verified"
+                            weight="fill"
+                            className="size-4 text-sky-400"
+                          />
+                        ) : null}
+                      </p>
                       <p className="text-xs text-muted-foreground">@{entry.user.username}</p>
                     </div>
                   </div>

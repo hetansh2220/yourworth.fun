@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +9,10 @@ import type { ChatMessage } from "@/components/chats/chat-messages";
 
 export type Conversation = {
   id: string;
+  type: "DM" | "GROUP";
   name: string;
   initials: string;
+  avatar?: string | null;
   unread: number;
   messages: ChatMessage[];
 };
@@ -36,7 +38,10 @@ export function ConversationList({ conversations, selectedId, onSelect }: {
           const last = conversation.messages.at(-1);
           return (
             <Button key={conversation.id} variant="ghost" className="h-auto w-full justify-start gap-3 rounded-none border-0 px-3 py-4 text-left hover:bg-white/5 dark:hover:bg-white/5 aria-current:bg-muted" aria-current={selectedId === conversation.id ? "true" : undefined} onClick={() => onSelect(conversation.id)}>
-              <Avatar><AvatarFallback className={selectedId === conversation.id ? "bg-primary/20 text-foreground" : "bg-muted text-muted-foreground"}>{conversation.initials}</AvatarFallback></Avatar>
+              <Avatar>
+                {conversation.avatar ? <AvatarImage src={conversation.avatar} alt="" /> : null}
+                <AvatarFallback className={selectedId === conversation.id ? "bg-primary/20 text-foreground" : "bg-muted text-muted-foreground"}>{conversation.initials}</AvatarFallback>
+              </Avatar>
               <span className="min-w-0 flex-1 space-y-1">
                 <span className="flex items-center justify-between gap-2">
                   <span className="truncate font-medium">{conversation.name}</span>

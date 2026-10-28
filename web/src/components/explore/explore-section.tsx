@@ -11,6 +11,7 @@ export type ExploreProfile = {
   name: string;
   bio: string;
   imageSrc: string;
+  verified?: boolean;
   minutePrice: number;
   change24h: number;
 };

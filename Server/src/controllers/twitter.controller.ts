@@ -81,7 +81,11 @@ const callbackSchema = z.object({
 });
 const tokenSchema = z.object({ access_token: z.string().min(1) });
 const profileSchema = z.object({
-  data: z.object({ id: z.string().min(1), username: z.string().min(1), verified: z.boolean() }),
+  data: z.object({
+    id: z.string().min(1),
+    username: z.string().min(1),
+    verified: z.boolean().optional(),
+  }),
 });
 
 export async function twitterCallback(c: Context<AppEnv>) {
@@ -140,10 +144,12 @@ export async function twitterCallback(c: Context<AppEnv>) {
           set: { twitterUsername: profile.username, updatedAt: new Date() },
         }),
       db.update(users)
-        .set({ verified: profile.verified, updatedAt: new Date() })
+        .set({ verified: profile.verified === true, updatedAt: new Date() })
         .where(eq(users.id, flow.userId)),
     ]);
-    return c.redirect("http://localhost:3000/settings/profile?twitter=connected");
+    return c.redirect(
+      `http://localhost:3000/settings/profile?twitter=connected&verified=${profile.verified}`,
+    );
   } catch (error) {
     console.error("Twitter callback error:", error);
     return c.text("Failed to connect Twitter. Start again.", 500);

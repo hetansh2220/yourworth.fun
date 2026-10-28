@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { ArrowLeftIcon, UsersIcon } from "@phosphor-icons/react";
 import { useChatMembers, useChats, useMessages } from "@/hooks/use-chats";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ChatComposer } from "@/components/chats/chat-composer";
@@ -23,10 +23,17 @@ import { useProfile } from "@/hooks/use-profile";
 
 export function ChatsScreen() {
   const { data: chats = [], isLoading, isError } = useChats();
+  useEffect(() => {
+    console.log("Chats fetched from backend:", chats);
+  }, [chats]);
   const conversations: Conversation[] = chats.map((chat) => ({
     id: chat.id,
-    name: chat.type === "GROUP" ? "Group chat" : "Direct message",
-    initials: chat.type === "GROUP" ? "GR" : "DM",
+    type: chat.type,
+    name: chat.name ?? (chat.type === "GROUP" ? "Group chat" : "Direct message"),
+    avatar: chat.avatar,
+    initials: (chat.name ?? (chat.type === "GROUP" ? "Group chat" : "Direct message"))
+      .slice(0, 2)
+      .toUpperCase(),
     unread: 0,
     messages: [],
   }));
@@ -206,6 +213,7 @@ export function ChatsScreen() {
               <ArrowLeftIcon aria-hidden="true" />
             </Button>
             <Avatar>
+              {selected?.avatar ? <AvatarImage src={selected.avatar} alt="" /> : null}
               <AvatarFallback className="bg-muted text-foreground">
                 {selected?.initials ?? "—"}
               </AvatarFallback>
@@ -213,7 +221,7 @@ export function ChatsScreen() {
             <h2 className="min-w-0 flex-1 truncate font-medium">
               {selected?.name ?? "Chats"}
             </h2>
-            {selected && (
+            {selected?.type === "GROUP" && (
               <GrpMembersDialog members={dialogMembers}>
                 <Button
                   variant="ghost"

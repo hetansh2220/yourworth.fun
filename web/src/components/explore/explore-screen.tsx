@@ -11,6 +11,7 @@ export function ExploreScreen() {
     name: user.name,
     bio: user.bio,
     imageSrc: user.avatar,
+    verified: user.verified,
     minutePrice: 0,
     change24h: 0,
   }));

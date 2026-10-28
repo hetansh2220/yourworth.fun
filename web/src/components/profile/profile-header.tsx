@@ -41,6 +41,8 @@ export function ProfileHeader({
   const profileName = matchedUser?.name ?? name;
   const profileImage = matchedUser?.avatar ?? imageSrc;
   const profileBio = matchedUser?.bio ?? bio;
+  const profileVerified = matchedUser?.verified ?? verified;
+  const profileXUsername = matchedUser?.socials?.twitterUsername ?? xUsername;
   const initials = profileName
     .trim()
     .split(/\s+/)
@@ -54,22 +56,26 @@ export function ProfileHeader({
       className="flex flex-col gap-6 sm:flex-row sm:gap-8"
     >
       <Avatar className="size-32 rounded-xl after:rounded-xl sm:size-40 lg:size-48">
-        <AvatarImage src={profileImage} alt={profileName} className="rounded-xl" />
+        <AvatarImage
+          src={profileImage}
+          alt={profileName}
+          className="rounded-xl"
+        />
         <AvatarFallback className="rounded-xl text-4xl">
           {initials}
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1 space-y-2 sm:py-2">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 text-center">
           <h1
             id="profile-name"
             className="break-words text-[32px] font-medium tracking-tight"
           >
             {profileName}
           </h1>
-          {verified && (
-            <span role="img" aria-label="Verified" className="text-primary">
-              <SealCheckIcon size={28} weight="fill" aria-hidden="true" />
+          {profileVerified && (
+            <span role="img" aria-label="Verified" className="text-sky-400">
+              <SealCheckIcon size={24} weight="fill" aria-hidden="true" />
             </span>
           )}
           {category && (
@@ -81,7 +87,9 @@ export function ProfileHeader({
             </Badge>
           )}
         </div>
-        <p className="text-base leading-relaxed text-muted-foreground">{profileBio}</p>
+        <p className="text-base leading-relaxed text-muted-foreground">
+          {profileBio}
+        </p>
         <ProfileStats
           rating={rating}
           reviewCount={reviewCount}
@@ -89,7 +97,7 @@ export function ProfileHeader({
         />
         <ProfileActions
           contractAddress={contractAddress}
-          xUsername={xUsername}
+          xUsername={profileXUsername}
           name={profileName}
           avatar={profileImage}
           reviewedUserId={matchedUser?.id ?? reviewedUserId}
