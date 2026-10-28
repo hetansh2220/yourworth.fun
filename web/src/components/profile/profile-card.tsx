@@ -50,7 +50,7 @@ export default function ProfileCard({
             <CardTitle className="truncate text-base">{name}</CardTitle>
             {verified && (
               <span
-                className="shrink-0 text-primary"
+                className="shrink-0 text-sky-400"
                 role="img"
                 aria-label="Verified"
               >
