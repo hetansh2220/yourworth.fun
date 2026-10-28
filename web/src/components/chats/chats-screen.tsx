@@ -60,7 +60,11 @@ export function ChatsScreen() {
       }),
     }),
   );
-  const displayMessages = messages.length > 0 ? messages : loadedMessages;
+  const displayMessages = Array.from(
+    new Map(
+      [...loadedMessages, ...messages].map((message) => [message.id, message]),
+    ).values(),
+  );
 
   useEffect(() => {
     if (!activeId) return;
