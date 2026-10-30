@@ -1,6 +1,13 @@
 "use client";
 
 import { PrivyProvider as DefaultPrivyProvider } from "@privy-io/react-auth";
+import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
+
+const devnetRpcUrl =
+  process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
+const mainnetRpcUrl =
+  process.env.NEXT_PUBLIC_SOLANA_MAINNET_RPC_URL ??
+  "https://api.mainnet-beta.solana.com";
 
 export default function PrivyProvider({
   children,
@@ -24,6 +31,24 @@ export default function PrivyProvider({
         embeddedWallets: {
           solana: {
             createOnLogin: "all-users",
+          },
+        },
+        solana: {
+          rpcs: {
+            "solana:devnet": {
+              rpc: createSolanaRpc(devnetRpcUrl),
+              rpcSubscriptions: createSolanaRpcSubscriptions(
+                devnetRpcUrl.replace(/^http/, "ws"),
+              ),
+              blockExplorerUrl: "https://explorer.solana.com/?cluster=devnet",
+            },
+            "solana:mainnet": {
+              rpc: createSolanaRpc(mainnetRpcUrl),
+              rpcSubscriptions: createSolanaRpcSubscriptions(
+                mainnetRpcUrl.replace(/^http/, "ws"),
+              ),
+              blockExplorerUrl: "https://explorer.solana.com",
+            },
           },
         },
       }}

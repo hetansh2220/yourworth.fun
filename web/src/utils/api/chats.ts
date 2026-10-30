@@ -46,6 +46,9 @@ export type MessagesResponse = {
 export type CreateDMInput = {
   userId: string;
   message: string;
+  transactionSignature?: string;
+  signatureId?: string;
+  signedTransaction?: string;
 };
 
 export type CreateDMResponse = {
