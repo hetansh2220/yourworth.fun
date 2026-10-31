@@ -2,7 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { ArrowLeftIcon, UsersIcon } from "@phosphor-icons/react";
-import { useChatMembers, useChats, useMessages } from "@/hooks/use-chats";
+import {
+  useChatMembers,
+  useChats,
+  useMessages,
+  useReplyDM,
+} from "@/hooks/use-chats";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -20,6 +25,13 @@ import { cn } from "@/lib/utils";
 import { usePrivy } from "@privy-io/react-auth";
 import { useRef } from "react";
 import { useProfile } from "@/hooks/use-profile";
+import { BN, web3, type Wallet } from "@coral-xyz/anchor";
+import { releasePayment } from "@/utils/solana/orders";
+import connection from "@/lib/connection";
+import {
+  useSignTransaction,
+  useWallets as useSolanaWallets,
+} from "@privy-io/react-auth/solana";
 
 export function ChatsScreen() {
   const { data: chats = [], isLoading, isError } = useChats();
@@ -29,9 +41,12 @@ export function ChatsScreen() {
   const conversations: Conversation[] = chats.map((chat) => ({
     id: chat.id,
     type: chat.type,
-    name: chat.name ?? (chat.type === "GROUP" ? "Group chat" : "Direct message"),
+    name:
+      chat.name ?? (chat.type === "GROUP" ? "Group chat" : "Direct message"),
     avatar: chat.avatar,
-    initials: (chat.name ?? (chat.type === "GROUP" ? "Group chat" : "Direct message"))
+    initials: (
+      chat.name ?? (chat.type === "GROUP" ? "Group chat" : "Direct message")
+    )
       .slice(0, 2)
       .toUpperCase(),
     unread: 0,
@@ -43,9 +58,13 @@ export function ChatsScreen() {
   const socketRef = useRef<WebSocket | null>(null);
   const { getAccessToken } = usePrivy();
   const { data: profile } = useProfile();
+  const replyDM = useReplyDM();
+  const { wallets } = useSolanaWallets();
   const activeId = selectedId ?? conversations[0]?.id;
   const selected = conversations.find((chat) => chat.id === activeId);
   const { data: chatMembers = [] } = useChatMembers(activeId);
+  const { signTransaction } = useSignTransaction();
+
   const dialogMembers = chatMembers.map((member) => ({
     id: member.id,
     name: member.name,
@@ -60,7 +79,10 @@ export function ChatsScreen() {
       outgoing: message.senderId === profile?.id,
       senderName: message.sender.name,
       senderInitials: message.sender.name.slice(0, 2).toUpperCase(),
-      senderAvatar: message.senderId === profile?.id ? profile.avatar : message.sender.avatar,
+      senderAvatar:
+        message.senderId === profile?.id
+          ? profile.avatar
+          : message.sender.avatar,
       time: new Date(message.createdAt).toLocaleTimeString([], {
         hour: "numeric",
         minute: "2-digit",
@@ -83,9 +105,7 @@ export function ChatsScreen() {
 
       if (!token || disposed) return;
 
-      const socket = new WebSocket(
-        `ws://localhost:8080/chats/${activeId}/ws`,
-      );
+      const socket = new WebSocket(`ws://localhost:8080/chats/${activeId}/ws`);
 
       socketRef.current = socket;
 
@@ -119,8 +139,20 @@ export function ChatsScreen() {
     const payload = JSON.parse(event.data) as {
       channel?: string;
       data:
-        | Array<{ id: string; senderId: string; content: string; createdAt: string; sender?: { name: string; avatar: string | null } }>
-        | { id: string; senderId: string; content: string; createdAt: string; sender?: { name: string; avatar: string | null } };
+        | Array<{
+            id: string;
+            senderId: string;
+            content: string;
+            createdAt: string;
+            sender?: { name: string; avatar: string | null };
+          }>
+        | {
+            id: string;
+            senderId: string;
+            content: string;
+            createdAt: string;
+            sender?: { name: string; avatar: string | null };
+          };
       message?: string;
     };
 
@@ -132,7 +164,10 @@ export function ChatsScreen() {
         outgoing: message.senderId === profile?.id,
         senderName: message.sender?.name,
         senderInitials: message.sender?.name.slice(0, 2).toUpperCase(),
-        senderAvatar: message.senderId === profile?.id ? profile.avatar : message.sender?.avatar,
+        senderAvatar:
+          message.senderId === profile?.id
+            ? profile.avatar
+            : message.sender?.avatar,
         time: new Date(message.createdAt).toLocaleTimeString([], {
           hour: "numeric",
           minute: "2-digit",
@@ -152,7 +187,10 @@ export function ChatsScreen() {
         }),
         senderName: payload.data.sender?.name,
         senderInitials: payload.data.sender?.name?.slice(0, 2).toUpperCase(),
-        senderAvatar: payload.data.senderId === profile?.id ? profile.avatar : payload.data.sender?.avatar,
+        senderAvatar:
+          payload.data.senderId === profile?.id
+            ? profile.avatar
+            : payload.data.sender?.avatar,
       };
       setMessages((prevMessages) => [...prevMessages, newMessage]);
     }
@@ -167,6 +205,124 @@ export function ChatsScreen() {
   }
 
   function sendMessage(text: string) {
+    async function replyToDM() {
+      if (!activeId || !profile || selected?.type !== "DM") return;
+
+      try {
+        const admin = new web3.PublicKey(
+          "EEjBLRkRAxMUX1dmeNhBkZN7FwbfLuV5xUXmguUUCZ7r",
+        );
+        const mint = new web3.PublicKey(
+          "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+        );
+        const participantWallet = wallets[0];
+        const walletAddress = participantWallet?.address?.trim();
+        if (!walletAddress) {
+          throw new Error("Connected Solana wallet is not available");
+        }
+
+        let participant: web3.PublicKey;
+        try {
+          participant = new web3.PublicKey(walletAddress);
+        } catch {
+          throw new Error("Your profile has an invalid Solana wallet address");
+        }
+        const solanaConnection = new web3.Connection(
+          process.env.NEXT_PUBLIC_SOLANA_RPC_URL!,
+          "confirmed",
+        );
+
+        const orderId = new Uint8Array(32);
+        const authorityEpoch = new BN(0);
+
+        const releaseInput = {
+          admin,
+          participant,
+          mint,
+          orderId,
+          authorityEpoch,
+        };
+
+        const anchorWallet = {
+          publicKey: participant,
+          signTransaction: async <T,>(transaction: T) => transaction,
+        } as Wallet;
+
+        const instruction = await releasePayment(anchorWallet, releaseInput);
+
+        const transaction = new web3.Transaction().add(instruction);
+        transaction.feePayer = new web3.PublicKey(
+          "EEjBLRkRAxMUX1dmeNhBkZN7FwbfLuV5xUXmguUUCZ7r",
+        );
+
+        transaction.recentBlockhash = (
+          await solanaConnection.getLatestBlockhash("confirmed")
+        ).blockhash;
+        const unsignedTransaction = transaction.serialize({
+          requireAllSignatures: false,
+          verifySignatures: false,
+        });
+
+        const { signedTransaction } = await signTransaction({
+          transaction: unsignedTransaction,
+          wallet: participantWallet,
+          chain: "solana:devnet",
+        });
+
+        console.log("Release transaction signed:", {
+          participant: participant.toBase58(),
+          orderId: Array.from(orderId),
+          signedTransactionBytes: signedTransaction.length,
+          signedTransaction,
+        });
+
+        const signedTx = web3.Transaction.from(signedTransaction);
+
+        const participantSignature = signedTx.signatures.find((entry) =>
+          entry.publicKey.equals(participant),
+        )?.signature;
+
+        if (!participantSignature) {
+          throw new Error("Participant signature missing");
+        }
+
+        const signatureId =
+          Buffer.from(participantSignature).toString("base64");
+
+        const signedTransactionBase64 = Buffer.from(
+          signedTx.serialize({
+            requireAllSignatures: false,
+            verifySignatures: false,
+          }),
+        ).toString("base64");
+
+        console.log("dsds", {
+          signatureId,
+          signedTransaction: signedTransactionBase64,
+        });
+
+        replyDM.mutate(
+          {
+            chatId: activeId,
+            input: {
+              message: text.trim(),
+              signedTransaction: signedTransactionBase64,
+            },
+          },
+          {
+            onError: (error) => console.error("DM reply failed:", error),
+          },
+        );
+      } catch (error) {
+        console.error("Failed to sign release transaction:", error);
+      }
+    }
+
+    if (selected?.type === "DM") {
+      void replyToDM();
+      return;
+    }
+
     if (socketRef.current?.readyState !== WebSocket.OPEN) {
       console.error("Chat socket is not connected");
       return;
@@ -213,7 +369,9 @@ export function ChatsScreen() {
               <ArrowLeftIcon aria-hidden="true" />
             </Button>
             <Avatar>
-              {selected?.avatar ? <AvatarImage src={selected.avatar} alt="" /> : null}
+              {selected?.avatar ? (
+                <AvatarImage src={selected.avatar} alt="" />
+              ) : null}
               <AvatarFallback className="bg-muted text-foreground">
                 {selected?.initials ?? "—"}
               </AvatarFallback>

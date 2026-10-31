@@ -19,11 +19,55 @@ export type CreateOrderInput = {
 export type SettleOrderInput = {
   admin: web3.PublicKey;
   participant: web3.PublicKey;
+  mint: web3.PublicKey;
+  orderId: Uint8Array;
   authorityEpoch: BN;
 };
 
 function getWorthProgram(wallet: Wallet) {
   return new Program<Worth>(idl as Worth, getAnchorProvider(wallet));
+}
+
+export function deriveOrderPda(
+  programId: web3.PublicKey,
+  orderId: Uint8Array,
+): web3.PublicKey {
+  if (orderId.length !== 32) {
+    throw new Error("orderId must contain exactly 32 bytes");
+  }
+
+  return web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("order"), Buffer.from(orderId)],
+    programId,
+  )[0];
+}
+
+function deriveSettlementAccounts(
+  programId: web3.PublicKey,
+  input: SettleOrderInput,
+) {
+  const order = deriveOrderPda(programId, input.orderId);
+  const tokenProgram = new web3.PublicKey(
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  );
+  const associatedTokenProgram = new web3.PublicKey(
+    "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+  );
+
+  const [vault] = web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("vault"), Buffer.from(input.orderId)],
+    programId,
+  );
+  const [destination] = web3.PublicKey.findProgramAddressSync(
+    [
+      input.participant.toBuffer(),
+      tokenProgram.toBuffer(),
+      input.mint.toBuffer(),
+    ],
+    associatedTokenProgram,
+  );
+
+  return { order, vault, destination, tokenProgram, associatedTokenProgram };
 }
 
 export async function createOrder(
@@ -43,7 +87,7 @@ export async function createOrder(
       input.authorityEpoch,
       input.expiresAt,
     )
-    .accounts({
+    .accountsPartial({
       admin: input.admin,
       buyer: input.buyer,
       creator: input.creator,
@@ -52,28 +96,38 @@ export async function createOrder(
     }).instruction();
 }
 
-export async function releassePayment(
+export async function releasePayment(
   wallet: Wallet,
   input: SettleOrderInput,
-): Promise<string> {
-  return getWorthProgram(wallet).methods
+) {
+  const program = getWorthProgram(wallet);
+  const accounts = deriveSettlementAccounts(program.programId, input);
+
+  return program.methods
     .releasePayment(input.authorityEpoch)
-    .accounts({
+    .accountsPartial({
       admin: input.admin,
       participant: input.participant,
+      ...accounts,
+      mint: input.mint,
     })
-    .rpc();
+    .instruction();
 }
 
 export async function refundOrder(
   wallet: Wallet,
   input: SettleOrderInput,
-): Promise<string> {
-  return getWorthProgram(wallet).methods
+) {
+  const program = getWorthProgram(wallet);
+  const accounts = deriveSettlementAccounts(program.programId, input);
+
+  return program.methods
     .refundOrder(input.authorityEpoch)
-    .accounts({
+    .accountsPartial({
       admin: input.admin,
       participant: input.participant,
+      ...accounts,
+      mint: input.mint,
     })
-    .rpc();
+    .instruction();
 }

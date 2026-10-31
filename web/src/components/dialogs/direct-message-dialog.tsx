@@ -203,7 +203,6 @@ export function DirectMessageDialog({
             }
           }}
         >
-          s
           <div className="relative">
             <label htmlFor={id} className="sr-only">
               Message for {username}
