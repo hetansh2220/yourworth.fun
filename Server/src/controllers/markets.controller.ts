@@ -51,6 +51,7 @@ export async function createMarket(c: Context<AppEnv>) {
 
   try {
     const user = await getMarketOwner(c);
+
     if (!user)
       return c.json(
         { success: false, message: "Authenticated profile is required" },

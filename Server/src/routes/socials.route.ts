@@ -1,7 +1,7 @@
 import {
   connectTwitter,
   twitterCallback,
-} from "@/controllers/twitter.controller";
+} from "@/helpers/twitter.helper";
 import { Hono } from "hono";
 import {
   createSocials,
