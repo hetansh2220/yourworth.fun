@@ -1,5 +1,4 @@
 import {
-  bigint,
   index,
   numeric,
   pgEnum,
@@ -28,9 +27,7 @@ export const dmRequests = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
 
-    requestId: bigint("request_id", {
-      mode: "number",
-    }).notNull(),
+    requestId: numeric("request_id", { precision: 78, scale: 0 }).notNull(),
 
     requestPda: text("request_pda").notNull(),
 
@@ -136,7 +133,7 @@ export const createDmRequestSchema = createInsertSchema(dmRequests)
     expiresAt: true,
   })
   .extend({
-    requestId: z.number().int().positive(),
+    requestId: z.string().regex(/^\d+$/).refine((value) => BigInt(value) < (1n << 256n), "Order ID must fit 32 bytes"),
     requestPda: z.string().trim().min(32),
     escrowTokenAccount: z.string().trim().min(32),
     messageId: z.string().uuid().optional(),

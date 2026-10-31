@@ -4,7 +4,10 @@ import { desc, eq, lt, getTableColumns } from "drizzle-orm";
 import { db } from "@/db";
 import { createUserSchema, updateUserSchema, users, socials } from "@/db/schema";
 import type { AppEnv } from "@/types/app";
-import { getBalance as getUsdcBalance } from "@/helpers/solana.helpers";
+import { PublicKey } from "@solana/web3.js";
+import { unpackAccount } from "@solana/spl-token";
+import { USDC_MINT } from "@/constants";
+import connection from "@/lib/connection";
 
 const socialFields = {
   twitterUsername: socials.twitterUsername,
@@ -445,3 +448,22 @@ export async function getUserBalance(c: Context<AppEnv>) {
     );
   }
 }
+
+/** Returns the wallet's total USDC balance in USDC units (not base units). */
+async function getUsdcBalance(address: string | PublicKey): Promise<number> {
+  const owner = typeof address === "string" ? new PublicKey(address) : address;
+  const accounts = await connection.getTokenAccountsByOwner(
+    owner,
+    { mint: new PublicKey(USDC_MINT) },
+    "confirmed",
+  );
+
+  const amount = accounts.value.reduce(
+    (total, account) =>
+      total + unpackAccount(account.pubkey, account.account).amount,
+    0n,
+  );
+
+  return Number(amount) / 1_000_000;
+}
+
