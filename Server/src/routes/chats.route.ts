@@ -4,6 +4,7 @@ import {
   chatWebSocket,
   createDM,
   replyDM,
+  refundDM,
   getChatById,
   getMembers,
   getMessages,
@@ -17,6 +18,7 @@ export const chatsRoute = new Hono<AppEnv>();
 
 chatsRoute.get("/", authMiddleware, getMyChats);
 chatsRoute.post("/dm", authMiddleware, createDM);
+chatsRoute.post("/:chatId/refund", authMiddleware, chatMemberMiddleware, refundDM);
 chatsRoute.post(
   "/:chatId/reply",
   authMiddleware,
