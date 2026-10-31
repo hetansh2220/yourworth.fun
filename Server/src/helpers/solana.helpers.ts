@@ -33,7 +33,6 @@ export function verifySignedTransaction(
   try {
     if (
       !signedTx ||
-      signedTx.length > 1644 ||
       !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
         signedTx,
       )

@@ -9,17 +9,12 @@ import { getMint } from "@solana/spl-token";
 import type BN from "bn.js";
 import connection from "@/lib/connection";
 import idl from "@/constants/idl.json";
-
-class PaymentError extends Error {}
-const paymentCoder = new BorshInstructionCoder(idl as Idl);
-
 import { USDC_MINT } from "@/constants";
 import type { Context } from "hono";
 import type { WSContext } from "hono/ws";
 import privy from "@/lib/privy";
 import { getSolanaEmbeddedWalletAddress } from "@/middleware/authMiddleware";
 import { and, desc, eq, getTableColumns, inArray, ne, sql } from "drizzle-orm";
-
 import { db } from "@/db";
 import {
   chatMembers,
@@ -34,6 +29,8 @@ import { upgradeWebSocket, type BunWebSocketData } from "@hono/bun";
 import { z } from "zod";
 import { chatTopic, publishMessage } from "@/lib/websocket";
 
+const paymentCoder = new BorshInstructionCoder(idl as Idl);
+
 const subscribeSchema = z.object({
   type: z.literal("subscribe"),
   chatId: z.string().uuid(),
@@ -44,14 +41,16 @@ const messageSchema = z.object({ content: z.string().trim().min(1).max(2000) });
 
 const createDMSchema = z.object({
   userId: z.string().uuid(),
-  signature: z.string().min(1).max(1644),
+  transaction: z.string().min(1),
   message: messageSchema.shape.content,
 });
 
 const replyDMSchema = z.object({
   message: messageSchema.shape.content,
-  signature: z.string().min(1).max(1644),
+  transaction: z.string().min(1),
 });
+
+const refundDMSchema = z.object({ transaction: z.string().min(1) });
 
 async function withChatProfiles<T extends typeof chats.$inferSelect>(
   rows: T[],
@@ -248,6 +247,329 @@ export async function getMessages(c: Context<AppEnv>) {
   }
 }
 
+/** Authenticated body: { userId: recipientUserId, message }. */
+export async function createDM(c: Context<AppEnv>) {
+  const parsed = createDMSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success)
+    return c.json(
+      {
+        success: false,
+        message: parsed.error.issues[0]?.message ?? "Invalid DM request",
+      },
+      400,
+    );
+  let confirmedSignature: string | undefined;
+  try {
+    const address = c.get("walletAddress");
+    if (
+      !verifySignedTransaction(
+        parsed.data.transaction,
+        PaymentTransactionType.REQUEST,
+      )
+    ) {
+      throw new Error("Invalid payment transaction");
+    }
+    const tx = Transaction.from(Buffer.from(parsed.data.transaction, "base64"));
+    const instruction = tx.instructions[0]!;
+    if (tx.instructions[0]?.keys[2]?.pubkey.toBase58() !== address)
+      throw new Error("Transaction signer does not match your wallet");
+    const args = paymentCoder.decode(instruction.data)!.data as {
+      order_id: number[];
+      amount_base_units: BN;
+      expires_at: BN;
+    };
+    const details = {
+      args,
+      requestId: BigInt(
+        `0x${Buffer.from(args.order_id).toString("hex")}`,
+      ).toString(),
+      requestPda: instruction.keys[6]!.pubkey.toBase58(),
+      escrowTokenAccount: instruction.keys[7]!.pubkey.toBase58(),
+      expiresAt: new Date(Number(args.expires_at.toString()) * 1000),
+    };
+    const [sender] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        avatar: users.avatar,
+      })
+      .from(users)
+      .where(eq(users.address, address))
+      .limit(1);
+    if (!sender)
+      return c.json(
+        { success: false, message: "Create your user profile first" },
+        404,
+      );
+    if (sender.id === parsed.data.userId)
+      return c.json(
+        { success: false, message: "You cannot create a DM with yourself" },
+        400,
+      );
+    const [recipient] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, parsed.data.userId))
+      .limit(1);
+    if (!recipient)
+      return c.json({ success: false, message: "User not found" }, 404);
+    const [existingRequest] = await db
+      .select()
+      .from(dmRequests)
+      .where(eq(dmRequests.requestPda, details.requestPda))
+      .limit(1);
+    if (existingRequest) {
+      if (
+        existingRequest.userId !== sender.id ||
+        existingRequest.creatorId !== recipient.id
+      )
+        throw new Error("Order is already used");
+      const [message] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, existingRequest.messageId))
+        .limit(1);
+      if (message?.content !== parsed.data.message)
+        throw new Error("Order is already used for another message");
+      return c.json({
+        success: true,
+        request: existingRequest,
+        message: { ...message, sender },
+        signature: existingRequest.createTxSignature,
+      });
+    }
+    const [market] = await db
+      .select()
+      .from(markets)
+      .where(
+        and(eq(markets.userId, recipient.id), eq(markets.marketType, "DM")),
+      )
+      .limit(1);
+    if (!market?.amount) throw new Error("DM market is not available");
+    const mint = market.paymentType === "USDC" ? USDC_MINT : recipient.token;
+    if (
+      !mint ||
+      instruction.keys[4]!.pubkey.toBase58() !== mint ||
+      instruction.keys[3]!.pubkey.toBase58() !== recipient.address
+    ) {
+      throw new Error("Wrong payment mint or recipient");
+    }
+    const { decimals } = await getMint(
+      connection,
+      new PublicKey(mint),
+      "confirmed",
+    );
+    const [whole = "0", fraction = ""] = market.amount.split(".");
+    if (/[1-9]/.test(fraction.slice(decimals)))
+      throw new Error("Invalid market price precision");
+    const amount =
+      BigInt(whole) * 10n ** BigInt(decimals) +
+      BigInt(fraction.slice(0, decimals).padEnd(decimals, "0") || "0");
+    if (amount <= 0n || args.amount_base_units.toString() !== amount.toString())
+      throw new Error("Incorrect payment amount");
+    const expiresAt = details.expiresAt.getTime();
+    if (
+      !Number.isFinite(expiresAt) ||
+      Math.abs(expiresAt - Date.now() - 7 * 86400000) > 300000
+    ) {
+      throw new Error("DM expiry must be one week from now");
+    }
+    const [existingChat] = await db
+      .select()
+      .from(chats)
+      .where(
+        and(
+          eq(chats.type, "DM"),
+          sql`exists (select 1 from ${chatMembers} where ${chatMembers.chatId} = ${chats.id} and ${chatMembers.userId} = ${sender.id})`,
+          sql`exists (select 1 from ${chatMembers} where ${chatMembers.chatId} = ${chats.id} and ${chatMembers.userId} = ${recipient.id})`,
+        ),
+      )
+      .limit(1);
+    confirmedSignature = await signAndSendTransaction(parsed.data.transaction);
+    const confirmation = await connection.confirmTransaction(
+      confirmedSignature,
+      "confirmed",
+    );
+    if (confirmation.value.err) throw new Error("Payment transaction failed");
+    // All chat/message/request writes commit together, after chain confirmation.
+    const chatStatement = existingChat
+      ? sql`update ${chats} set updated_at = now() where id = ${existingChat.id}::uuid returning *`
+      : sql`insert into ${chats} (type, admin) values ('DM', ${sender.id}::uuid) returning *`;
+    const result = await db.execute<{
+      chat: typeof chats.$inferSelect;
+      message: typeof messages.$inferSelect;
+      request: Record<string, unknown>;
+    }>(sql`
+      with saved_chat as (${chatStatement}), saved_members as (
+        insert into ${chatMembers} (chat_id, user_id)
+        select id, ${sender.id}::uuid from saved_chat
+        union all select id, ${recipient.id}::uuid from saved_chat where true
+        on conflict (chat_id, user_id) do nothing
+      ), saved_message as (
+        insert into ${messages} (chat_id, sender_id, content)
+        select id, ${sender.id}::uuid, ${parsed.data.message} from saved_chat
+        returning id, chat_id as "chatId", sender_id as "senderId", content,
+          created_at as "createdAt", updated_at as "updatedAt", deleted_at as "deletedAt"
+      ), saved_request as (
+        insert into ${dmRequests} (request_id, request_pda, escrow_token_account, chat_id, message_id, user_id, creator_id, payment_mint, amount, create_tx_signature, expires_at)
+        select ${details.requestId}::numeric, ${details.requestPda}, ${details.escrowTokenAccount}, "chatId", id,
+          ${sender.id}::uuid, ${recipient.id}::uuid, ${mint}, ${details.args.amount_base_units.toString()}::numeric,
+          ${confirmedSignature}, ${details.expiresAt.toISOString()}::timestamptz from saved_message
+        returning id
+      )
+      select json_build_object('id', saved_chat.id, 'type', saved_chat.type, 'admin', saved_chat.admin,
+        'createdAt', saved_chat.created_at, 'updatedAt', saved_chat.updated_at) as chat,
+        row_to_json(saved_message) as message, row_to_json(saved_request) as request
+      from saved_chat cross join saved_message cross join saved_request
+    `);
+    const saved = result.rows[0];
+    if (!saved) throw new Error("DM was not saved");
+    const message = { ...saved.message, sender };
+    publishMessage(saved.chat.id, message);
+    return c.json(
+      { success: true, ...saved, message, signature: confirmedSignature },
+      201,
+    );
+  } catch (error) {
+    console.error("Create DM error:", error);
+    return c.json(
+      {
+        success: false,
+        message: confirmedSignature
+          ? "Transaction submitted but confirmation or database save failed. Check the returned signature before retrying."
+          : "Failed to create DM. Retry the same transaction to check its status.",
+        signature: confirmedSignature,
+      },
+      500,
+    );
+  }
+}
+
+export async function replyDM(c: Context<AppEnv>) {
+  const parsed = replyDMSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success)
+    return c.json(
+      {
+        success: false,
+        message: parsed.error.issues[0]?.message ?? "Invalid DM reply",
+      },
+      400,
+    );
+  if (c.get("chatType") !== "DM")
+    return c.json({ success: false, message: "This chat is not a DM" }, 400);
+  let confirmedSignature: string | undefined;
+  try {
+    const chatId = c.get("chatId");
+    const address = c.get("walletAddress");
+    if (
+      !verifySignedTransaction(
+        parsed.data.transaction,
+        PaymentTransactionType.PAYOUT,
+      )
+    ) {
+      throw new Error("Invalid payout transaction");
+    }
+    const tx = Transaction.from(Buffer.from(parsed.data.transaction, "base64"));
+    if (tx.instructions[0]?.keys[2]?.pubkey.toBase58() !== address)
+      throw new Error("Transaction signer does not match your wallet");
+    const order = tx.instructions[0]!.keys[3]?.pubkey.toBase58();
+    if (!order) throw new Error("Missing payment order");
+    const [request] = await db
+      .select()
+      .from(dmRequests)
+      .where(
+        and(
+          eq(dmRequests.requestPda, order),
+          eq(dmRequests.chatId, chatId),
+          eq(dmRequests.creatorId, c.get("currentUserId")),
+        ),
+      )
+      .limit(1);
+    if (!request)
+      return c.json(
+        {
+          success: false,
+          message: "DM request not found for this creator and chat",
+        },
+        404,
+      );
+    if (request.status === "COMPLETED")
+      return c.json({
+        success: true,
+        request,
+        signature: request.completeTxSignature,
+      });
+    if (request.status !== "PENDING")
+      throw new Error("DM request is not pending");
+    const [sender] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        avatar: users.avatar,
+      })
+      .from(users)
+      .where(eq(users.id, c.get("currentUserId")))
+      .limit(1);
+    if (!sender)
+      return c.json({ success: false, message: "User not found" }, 404);
+    const instruction = tx.instructions[0]!;
+    if (
+      instruction.keys[4]!.pubkey.toBase58() !== request.paymentMint ||
+      instruction.keys[5]!.pubkey.toBase58() !== request.escrowTokenAccount
+    ) {
+      throw new Error("Payout does not match the DM request");
+    }
+    confirmedSignature = await signAndSendTransaction(parsed.data.transaction);
+    const confirmation = await connection.confirmTransaction(
+      confirmedSignature,
+      "confirmed",
+    );
+    if (confirmation.value.err) throw new Error("Payment transaction failed");
+    const result = await db.execute<{
+      message: typeof messages.$inferSelect;
+    }>(sql`
+      with completed as (
+        update ${dmRequests} set status = 'COMPLETED', complete_tx_signature = ${confirmedSignature}, completed_at = now(), updated_at = now()
+        where id = ${request.id}::uuid and status = 'PENDING' returning chat_id
+      ), saved_message as (
+        insert into ${messages} (chat_id, sender_id, content)
+        select chat_id, ${sender.id}::uuid, ${parsed.data.message} from completed
+        returning id, chat_id as "chatId", sender_id as "senderId", content,
+          created_at as "createdAt", updated_at as "updatedAt", deleted_at as "deletedAt"
+      ), updated_chat as (
+        update ${chats} set updated_at = now() where id in (select chat_id from completed)
+      ) select row_to_json(saved_message) as message from saved_message
+    `);
+    const saved = result.rows[0];
+    if (!saved)
+      return c.json({
+        success: true,
+        signature: confirmedSignature,
+        message: "Request already completed",
+      });
+    const message = { ...saved.message, sender };
+    publishMessage(chatId, message);
+    return c.json(
+      { success: true, message, signature: confirmedSignature },
+      201,
+    );
+  } catch (error) {
+    console.error("Reply DM error:", error);
+    return c.json(
+      {
+        success: false,
+        message: confirmedSignature
+          ? "Transaction submitted but confirmation or database save failed. Check the returned signature before retrying."
+          : "Failed to reply to DM. Retry the same transaction to check its status.",
+        signature: confirmedSignature,
+      },
+      500,
+    );
+  }
+}
+
 export const chatWebSocket = upgradeWebSocket((c: Context<AppEnv>) => {
   const routeChatId = c.req.param("chatId");
   let senderId: string | undefined;
@@ -422,245 +744,43 @@ export const chatWebSocket = upgradeWebSocket((c: Context<AppEnv>) => {
   };
 });
 
-/** Authenticated body: { userId: recipientUserId, message }. */
-export async function createDM(c: Context<AppEnv>) {
-  const parsed = createDMSchema.safeParse(await c.req.json().catch(() => null));
+export async function refundDM(c: Context<AppEnv>) {
+  const parsed = refundDMSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success)
     return c.json(
       {
         success: false,
-        message: parsed.error.issues[0]?.message ?? "Invalid DM request",
+        message: "Provide a base64 refund transaction",
       },
       400,
     );
-  let confirmedSignature: string | undefined;
-  try {
-    const address = c.get("walletAddress");
-    if (
-      !verifySignedTransaction(
-        parsed.data.signature,
-        PaymentTransactionType.REQUEST,
-      )
-    ) {
-      throw new PaymentError("Invalid payment transaction");
-    }
-    const tx = Transaction.from(Buffer.from(parsed.data.signature, "base64"));
-    const instruction = tx.instructions[0]!;
-    if (tx.instructions[0]?.keys[2]?.pubkey.toBase58() !== address)
-      throw new PaymentError("Transaction signer does not match your wallet");
-    const args = paymentCoder.decode(instruction.data)!.data as {
-      order_id: number[];
-      amount_base_units: BN;
-      expires_at: BN;
-    };
-    const details = {
-      args,
-      requestId: BigInt(
-        `0x${Buffer.from(args.order_id).toString("hex")}`,
-      ).toString(),
-      requestPda: instruction.keys[6]!.pubkey.toBase58(),
-      escrowTokenAccount: instruction.keys[7]!.pubkey.toBase58(),
-      expiresAt: new Date(Number(args.expires_at.toString()) * 1000),
-    };
-    const [sender] = await db
-      .select({
-        id: users.id,
-        name: users.name,
-        username: users.username,
-        avatar: users.avatar,
-      })
-      .from(users)
-      .where(eq(users.address, address))
-      .limit(1);
-    if (!sender)
-      return c.json(
-        { success: false, message: "Create your user profile first" },
-        404,
-      );
-    if (sender.id === parsed.data.userId)
-      return c.json(
-        { success: false, message: "You cannot create a DM with yourself" },
-        400,
-      );
-    const [recipient] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, parsed.data.userId))
-      .limit(1);
-    if (!recipient)
-      return c.json({ success: false, message: "User not found" }, 404);
-    const [existingRequest] = await db
-      .select()
-      .from(dmRequests)
-      .where(eq(dmRequests.requestPda, details.requestPda))
-      .limit(1);
-    if (existingRequest) {
-      if (
-        existingRequest.userId !== sender.id ||
-        existingRequest.creatorId !== recipient.id
-      )
-        throw new PaymentError("Order is already used");
-      const [message] = await db
-        .select()
-        .from(messages)
-        .where(eq(messages.id, existingRequest.messageId))
-        .limit(1);
-      if (message?.content !== parsed.data.message)
-        throw new PaymentError("Order is already used for another message");
-      return c.json({
-        success: true,
-        request: existingRequest,
-        message: { ...message, sender },
-        signature: existingRequest.createTxSignature,
-      });
-    }
-    const [market] = await db
-      .select()
-      .from(markets)
-      .where(
-        and(eq(markets.userId, recipient.id), eq(markets.marketType, "DM")),
-      )
-      .limit(1);
-    if (!market?.amount) throw new PaymentError("DM market is not available");
-    const mint = market.paymentType === "USDC" ? USDC_MINT : recipient.token;
-    if (
-      !mint ||
-      instruction.keys[4]!.pubkey.toBase58() !== mint ||
-      instruction.keys[3]!.pubkey.toBase58() !== recipient.address
-    ) {
-      throw new PaymentError("Wrong payment mint or recipient");
-    }
-    const { decimals } = await getMint(
-      connection,
-      new PublicKey(mint),
-      "confirmed",
-    );
-    const [whole = "0", fraction = ""] = market.amount.split(".");
-    if (/[1-9]/.test(fraction.slice(decimals)))
-      throw new PaymentError("Invalid market price precision");
-    const amount =
-      BigInt(whole) * 10n ** BigInt(decimals) +
-      BigInt(fraction.slice(0, decimals).padEnd(decimals, "0") || "0");
-    if (amount <= 0n || args.amount_base_units.toString() !== amount.toString())
-      throw new PaymentError("Incorrect payment amount");
-    const expiresAt = details.expiresAt.getTime();
-    if (
-      !Number.isFinite(expiresAt) ||
-      Math.abs(expiresAt - Date.now() - 7 * 86400000) > 300000
-    ) {
-      throw new PaymentError("DM expiry must be one week from now");
-    }
-    const [existingChat] = await db
-      .select()
-      .from(chats)
-      .where(
-        and(
-          eq(chats.type, "DM"),
-          sql`exists (select 1 from ${chatMembers} where ${chatMembers.chatId} = ${chats.id} and ${chatMembers.userId} = ${sender.id})`,
-          sql`exists (select 1 from ${chatMembers} where ${chatMembers.chatId} = ${chats.id} and ${chatMembers.userId} = ${recipient.id})`,
-        ),
-      )
-      .limit(1);
-    confirmedSignature = await signAndSendTransaction(parsed.data.signature);
-    const confirmation = await connection.confirmTransaction(
-      confirmedSignature,
-      "confirmed",
-    );
-    if (confirmation.value.err)
-      throw new PaymentError("Payment transaction failed");
-    // All chat/message/request writes commit together, after chain confirmation.
-    const chatStatement = existingChat
-      ? sql`update ${chats} set updated_at = now() where id = ${existingChat.id}::uuid returning *`
-      : sql`insert into ${chats} (type, admin) values ('DM', ${sender.id}::uuid) returning *`;
-    const result = await db.execute<{
-      chat: typeof chats.$inferSelect;
-      message: typeof messages.$inferSelect;
-      request: Record<string, unknown>;
-    }>(sql`
-      with saved_chat as (${chatStatement}), saved_members as (
-        insert into ${chatMembers} (chat_id, user_id)
-        select id, ${sender.id}::uuid from saved_chat
-        union all select id, ${recipient.id}::uuid from saved_chat where true
-        on conflict (chat_id, user_id) do nothing
-      ), saved_message as (
-        insert into ${messages} (chat_id, sender_id, content)
-        select id, ${sender.id}::uuid, ${parsed.data.message} from saved_chat
-        returning id, chat_id as "chatId", sender_id as "senderId", content,
-          created_at as "createdAt", updated_at as "updatedAt", deleted_at as "deletedAt"
-      ), saved_request as (
-        insert into ${dmRequests} (request_id, request_pda, escrow_token_account, chat_id, message_id, user_id, creator_id, payment_mint, amount, create_tx_signature, expires_at)
-        select ${details.requestId}::numeric, ${details.requestPda}, ${details.escrowTokenAccount}, "chatId", id,
-          ${sender.id}::uuid, ${recipient.id}::uuid, ${mint}, ${details.args.amount_base_units.toString()}::numeric,
-          ${confirmedSignature}, ${details.expiresAt.toISOString()}::timestamptz from saved_message
-        returning id
-      )
-      select json_build_object('id', saved_chat.id, 'type', saved_chat.type, 'admin', saved_chat.admin,
-        'createdAt', saved_chat.created_at, 'updatedAt', saved_chat.updated_at) as chat,
-        row_to_json(saved_message) as message, row_to_json(saved_request) as request
-      from saved_chat cross join saved_message cross join saved_request
-    `);
-    const saved = result.rows[0];
-    if (!saved) throw new Error("DM was not saved");
-    const message = { ...saved.message, sender };
-    publishMessage(saved.chat.id, message);
-    return c.json(
-      { success: true, ...saved, message, signature: confirmedSignature },
-      201,
-    );
-  } catch (error) {
-    if (error instanceof PaymentError)
-      return c.json({ success: false, message: error.message }, 400);
-    console.error("Create DM error:", error);
-    return c.json(
-      {
-        success: false,
-        message: confirmedSignature
-          ? "Transaction submitted but confirmation or database save failed. Check the returned signature before retrying."
-          : "Failed to create DM. Retry the same transaction to check its status.",
-        signature: confirmedSignature,
-      },
-      500,
-    );
-  }
-}
 
-export async function replyDM(c: Context<AppEnv>) {
-  const parsed = replyDMSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success)
-    return c.json(
-      {
-        success: false,
-        message: parsed.error.issues[0]?.message ?? "Invalid DM reply",
-      },
-      400,
-    );
   if (c.get("chatType") !== "DM")
     return c.json({ success: false, message: "This chat is not a DM" }, 400);
-  let confirmedSignature: string | undefined;
+
+  let signature: string | undefined;
   try {
-    const chatId = c.get("chatId");
-    const address = c.get("walletAddress");
     if (
       !verifySignedTransaction(
-        parsed.data.signature,
-        PaymentTransactionType.PAYOUT,
+        parsed.data.transaction,
+        PaymentTransactionType.REFUND,
       )
     ) {
-      throw new PaymentError("Invalid payout transaction");
+      throw new Error("Invalid refund transaction");
     }
-    const tx = Transaction.from(Buffer.from(parsed.data.signature, "base64"));
-    if (tx.instructions[0]?.keys[2]?.pubkey.toBase58() !== address)
-      throw new PaymentError("Transaction signer does not match your wallet");
-    const order = tx.instructions[0]!.keys[3]?.pubkey.toBase58();
-    if (!order) throw new PaymentError("Missing payment order");
+    const tx = Transaction.from(Buffer.from(parsed.data.transaction, "base64"));
+    const instruction = tx.instructions[0]!;
+    if (instruction.keys[2]!.pubkey.toBase58() !== c.get("walletAddress")) {
+      throw new Error("Transaction signer does not match your wallet");
+    }
     const [request] = await db
       .select()
       .from(dmRequests)
       .where(
         and(
-          eq(dmRequests.requestPda, order),
-          eq(dmRequests.chatId, chatId),
-          eq(dmRequests.creatorId, c.get("currentUserId")),
+          eq(dmRequests.requestPda, instruction.keys[3]!.pubkey.toBase58()),
+          eq(dmRequests.chatId, c.get("chatId")),
+          eq(dmRequests.userId, c.get("currentUserId")),
         ),
       )
       .limit(1);
@@ -668,83 +788,73 @@ export async function replyDM(c: Context<AppEnv>) {
       return c.json(
         {
           success: false,
-          message: "DM request not found for this creator and chat",
+          message: "DM request not found for this buyer and chat",
         },
         404,
       );
-    if (request.status === "COMPLETED")
+    if (request.status === "REFUNDED")
       return c.json({
         success: true,
         request,
-        signature: request.completeTxSignature,
+        signature: request.refundTxSignature,
       });
-    if (request.status !== "PENDING")
-      throw new PaymentError("DM request is not pending");
-    const [sender] = await db
-      .select({
-        id: users.id,
-        name: users.name,
-        username: users.username,
-        avatar: users.avatar,
-      })
-      .from(users)
-      .where(eq(users.id, c.get("currentUserId")))
-      .limit(1);
-    if (!sender)
-      return c.json({ success: false, message: "User not found" }, 404);
-    const instruction = tx.instructions[0]!;
+    if (request.status !== "PENDING" && request.status !== "EXPIRED")
+      throw new Error("DM request cannot be refunded");
+    if (request.expiresAt.getTime() > Date.now())
+      throw new Error("DM request has not expired yet");
     if (
       instruction.keys[4]!.pubkey.toBase58() !== request.paymentMint ||
       instruction.keys[5]!.pubkey.toBase58() !== request.escrowTokenAccount
     ) {
-      throw new PaymentError("Payout does not match the DM request");
+      throw new Error("Refund does not match the DM request");
     }
-    confirmedSignature = await signAndSendTransaction(parsed.data.signature);
+
+    signature = await signAndSendTransaction(parsed.data.transaction);
     const confirmation = await connection.confirmTransaction(
-      confirmedSignature,
+      signature,
       "confirmed",
     );
-    if (confirmation.value.err)
-      throw new PaymentError("Payment transaction failed");
-    const result = await db.execute<{
-      message: typeof messages.$inferSelect;
-    }>(sql`
-      with completed as (
-        update ${dmRequests} set status = 'COMPLETED', complete_tx_signature = ${confirmedSignature}, completed_at = now(), updated_at = now()
-        where id = ${request.id}::uuid and status = 'PENDING' returning chat_id
-      ), saved_message as (
-        insert into ${messages} (chat_id, sender_id, content)
-        select chat_id, ${sender.id}::uuid, ${parsed.data.message} from completed
-        returning id, chat_id as "chatId", sender_id as "senderId", content,
-          created_at as "createdAt", updated_at as "updatedAt", deleted_at as "deletedAt"
-      ), updated_chat as (
-        update ${chats} set updated_at = now() where id in (select chat_id from completed)
-      ) select row_to_json(saved_message) as message from saved_message
-    `);
-    const saved = result.rows[0];
-    if (!saved)
-      return c.json({
-        success: true,
-        signature: confirmedSignature,
-        message: "Request already completed",
-      });
-    const message = { ...saved.message, sender };
-    publishMessage(chatId, message);
-    return c.json(
-      { success: true, message, signature: confirmedSignature },
-      201,
-    );
+    if (confirmation.value.err) throw new Error("Refund transaction failed");
+
+    const [updated] = await db
+      .update(dmRequests)
+      .set({
+        status: "REFUNDED",
+        refundTxSignature: signature,
+        refundedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(dmRequests.id, request.id),
+          inArray(dmRequests.status, ["PENDING", "EXPIRED"]),
+        ),
+      )
+      .returning();
+    if (!updated) {
+      const [current] = await db
+        .select()
+        .from(dmRequests)
+        .where(eq(dmRequests.id, request.id))
+        .limit(1);
+      if (current?.status === "REFUNDED")
+        return c.json({
+          success: true,
+          request: current,
+          signature: current.refundTxSignature,
+        });
+      throw new Error("Refund confirmed but request status changed");
+    }
+    return c.json({ success: true, request: updated, signature });
   } catch (error) {
-    if (error instanceof PaymentError)
-      return c.json({ success: false, message: error.message }, 400);
-    console.error("Reply DM error:", error);
+    console.error("Refund DM error:", error);
     return c.json(
       {
         success: false,
-        message: confirmedSignature
+        message: signature
           ? "Transaction submitted but confirmation or database save failed. Check the returned signature before retrying."
-          : "Failed to reply to DM. Retry the same transaction to check its status.",
-        signature: confirmedSignature,
+          : "Failed to refund DM",
+        signature,
       },
       500,
     );
