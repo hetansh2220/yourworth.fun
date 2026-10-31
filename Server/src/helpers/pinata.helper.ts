@@ -1,3 +1,5 @@
+import { PINATA_API_URL, DEFAULT_PINATA_GATEWAY } from "../constants/index.ts";
+
 type PinataIpfsResponse = {
   IpfsHash: string;
   PinSize: number;
@@ -12,9 +14,6 @@ type CreateTokenMetadataUriParams = {
   imageUrl?: string;
   metadataName?: string;
 };
-
-const PINATA_API_URL = "https://api.pinata.cloud/pinning";
-const DEFAULT_PINATA_GATEWAY = "https://gateway.pinata.cloud/ipfs";
 
 function getPinataJwt() {
   const jwt = process.env.PINATA_JWT;

@@ -185,11 +185,16 @@ export async function twitterCallback(c: Context<AppEnv>) {
   }
 }
 
-/** Fetches the profile belonging to an X OAuth user access token. */
-export async function getTwitterUser(accessToken: string) {
-  if (!accessToken.trim()) throw new Error("Twitter access token is required");
+/** Fetches a public X profile using the app bearer token. */
+export async function getTwitterUser(username: string, bearerToken: string) {
+  const accessToken = bearerToken.trim();
+  if (!accessToken) throw new Error("Missing X_BEARER_TOKEN");
+  if (!/^[a-zA-Z0-9_]{1,15}$/.test(username))
+    throw new Error("Invalid Twitter username");
 
-  const url = new URL("https://api.x.com/2/users/me");
+  const url = new URL(
+    `https://api.x.com/2/users/by/username/${encodeURIComponent(username)}`,
+  );
 
   url.searchParams.set(
     "user.fields",
