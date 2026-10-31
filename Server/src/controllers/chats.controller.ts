@@ -24,32 +24,61 @@ const createDMSchema = z.object({
   message: messageSchema.shape.content,
 });
 
+const replyDMSchema = z.object({ message: messageSchema.shape.content });
+
 async function withChatProfiles<T extends typeof chats.$inferSelect>(
   rows: T[],
   currentUserId: string,
 ) {
-  const adminIds = [...new Set(rows.filter((chat) => chat.type === "GROUP").map((chat) => chat.admin))];
-  const dmIds = rows.filter((chat) => chat.type === "DM").map((chat) => chat.id);
+  const adminIds = [
+    ...new Set(
+      rows.filter((chat) => chat.type === "GROUP").map((chat) => chat.admin),
+    ),
+  ];
+  const dmIds = rows
+    .filter((chat) => chat.type === "DM")
+    .map((chat) => chat.id);
   const [admins, members] = await Promise.all([
     adminIds.length
-      ? db.select({ id: users.id, name: users.name, avatar: users.avatar })
-          .from(users).where(inArray(users.id, adminIds))
+      ? db
+          .select({ id: users.id, name: users.name, avatar: users.avatar })
+          .from(users)
+          .where(inArray(users.id, adminIds))
       : [],
     dmIds.length
-      ? db.select({ chatId: chatMembers.chatId, name: users.name, avatar: users.avatar })
+      ? db
+          .select({
+            chatId: chatMembers.chatId,
+            name: users.name,
+            avatar: users.avatar,
+          })
           .from(chatMembers)
           .innerJoin(users, eq(users.id, chatMembers.userId))
-          .where(and(inArray(chatMembers.chatId, dmIds), ne(chatMembers.userId, currentUserId)))
+          .where(
+            and(
+              inArray(chatMembers.chatId, dmIds),
+              ne(chatMembers.userId, currentUserId),
+            ),
+          )
           .orderBy(chatMembers.joinedAt, chatMembers.id)
       : [],
   ]);
   const adminById = new Map(admins.map((admin) => [admin.id, admin]));
-  const memberByChat = new Map(members.map((member) => [member.chatId, member]));
+  const memberByChat = new Map(
+    members.map((member) => [member.chatId, member]),
+  );
   return rows.map((chat) => {
-    const profile = chat.type === "GROUP" ? adminById.get(chat.admin) : memberByChat.get(chat.id);
+    const profile =
+      chat.type === "GROUP"
+        ? adminById.get(chat.admin)
+        : memberByChat.get(chat.id);
     return {
       ...chat,
-      name: profile ? (chat.type === "GROUP" ? `${profile.name}'s group` : profile.name) : null,
+      name: profile
+        ? chat.type === "GROUP"
+          ? `${profile.name}'s group`
+          : profile.name
+        : null,
       avatar: profile?.avatar ?? null,
     };
   });
@@ -81,7 +110,10 @@ export async function getMyChats(c: Context<AppEnv>) {
       .where(eq(chatMembers.userId, user.id))
       .orderBy(desc(chats.updatedAt));
 
-    return c.json({ success: true, chats: await withChatProfiles(rows, user.id) });
+    return c.json({
+      success: true,
+      chats: await withChatProfiles(rows, user.id),
+    });
   } catch (error) {
     console.error("Get my chats error:", error);
     return c.json({ success: false, message: "Failed to retrieve chats" }, 500);
@@ -102,7 +134,10 @@ export async function getChatById(c: Context<AppEnv>) {
       return c.json({ success: false, message: "Chat not found" }, 404);
     }
 
-    const [profileChat] = await withChatProfiles([chat], c.get("currentUserId"));
+    const [profileChat] = await withChatProfiles(
+      [chat],
+      c.get("currentUserId"),
+    );
     return c.json({ success: true, chat: profileChat });
   } catch (error) {
     console.error("Get chat error:", error);
@@ -486,5 +521,72 @@ export async function createDM(c: Context<AppEnv>) {
   } catch (error) {
     console.error("Create DM error:", error);
     return c.json({ success: false, message: "Failed to create DM" }, 500);
+  }
+}
+
+export async function replyDM(c: Context<AppEnv>) {
+  const parsed = replyDMSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        message: parsed.error.issues[0]?.message ?? "Invalid DM reply",
+      },
+      400,
+    );
+  }
+
+  // Membership and chat context are supplied by chatMemberMiddleware.
+  if (c.get("chatType") !== "DM") {
+    return c.json({ success: false, message: "This chat is not a DM" }, 400);
+  }
+
+  try {
+    const chatId = c.get("chatId");
+    const [sender] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        avatar: users.avatar,
+      })
+      .from(users)
+      .where(eq(users.id, c.get("currentUserId")))
+      .limit(1);
+
+    if (!sender) {
+      return c.json({ success: false, message: "User not found" }, 404);
+    }
+
+    const [savedMessages, updatedChats] = await db.batch([
+      db
+        .insert(messages)
+        .values({
+          chatId,
+          senderId: sender.id,
+          content: parsed.data.message,
+        })
+        .returning(),
+      db
+        .update(chats)
+        .set({ updatedAt: new Date() })
+        .where(eq(chats.id, chatId))
+        .returning(),
+    ]);
+    const message = savedMessages[0];
+    if (!message) throw new Error("Message was not saved");
+    const messageWithSender = { ...message, sender };
+    publishMessage(chatId, messageWithSender);
+    return c.json(
+      {
+        success: true,
+        chat: updatedChats[0],
+        message: messageWithSender,
+      },
+      201,
+    );
+  } catch (error) {
+    console.error("Reply DM error:", error);
+    return c.json({ success: false, message: "Failed to reply to DM" }, 500);
   }
 }
