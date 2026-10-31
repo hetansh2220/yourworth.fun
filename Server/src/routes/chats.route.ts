@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import {
   chatWebSocket,
   createDM,
+  replyDM,
   getChatById,
   getMembers,
   getMessages,
@@ -16,6 +17,12 @@ export const chatsRoute = new Hono<AppEnv>();
 
 chatsRoute.get("/", authMiddleware, getMyChats);
 chatsRoute.post("/dm", authMiddleware, createDM);
+chatsRoute.post(
+  "/:chatId/reply",
+  authMiddleware,
+  chatMemberMiddleware,
+  replyDM,
+);
 chatsRoute.get("/:chatId", authMiddleware, chatMemberMiddleware, getChatById);
 chatsRoute.get(
   "/:chatId/members",
