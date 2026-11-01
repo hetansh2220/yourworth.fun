@@ -8,7 +8,6 @@ import type { AppEnv } from "@/types/app";
 import { Keypair, PublicKey, sendAndConfirmTransaction } from "@solana/web3.js";
 import { deriveDbcPoolAddress } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import { CONFIG_ADDRESS } from "@/constants";
-import { getTwitterUser } from "@/helpers/twitter.helper";
 import { createTokenMetadataUri } from "@/helpers/pinata.helper";
 import { createPool } from "@/helpers/meteora.helpers";
 import connection from "@/lib/connection";
@@ -33,6 +32,8 @@ async function getMarketOwner(c: Context<AppEnv>) {
     .select({
       id: users.id,
       token: users.token,
+      avatar: users.avatar,
+      bio: users.bio,
     })
     .from(users)
     .where(eq(users.address, address))
@@ -84,20 +85,12 @@ export async function createMarket(c: Context<AppEnv>) {
       );
     }
 
-    const twitterBearerToken = c.req.header("X_BEARER_TOKEN")?.trim();
-    if (!twitterBearerToken) {
-      return c.json(
-        { success: false, message: "X_BEARER_TOKEN header is required" },
-        400,
-      );
-    }
-    const profile = await getTwitterUser(social.username, twitterBearerToken);
-    const name = `${profile.username}'s Time`;
+    const name = `${social.username}'s Time`;
     // SPL metadata symbols allow at most ten bytes.
-    const symbol = profile.username.toUpperCase().slice(0, 10);
-    if (!profile.profilePicture) {
+    const symbol = social.username.toUpperCase().slice(0, 10);
+    if (!user.avatar) {
       return c.json(
-        { success: false, message: "Twitter profile picture is required" },
+        { success: false, message: "Profile avatar is required" },
         400,
       );
     }
@@ -107,8 +100,8 @@ export async function createMarket(c: Context<AppEnv>) {
     const { metadataUri } = await createTokenMetadataUri({
       name,
       symbol,
-      description: profile.bio ?? name,
-      imageUrl: profile.profilePicture,
+      description: user.bio || name,
+      imageUrl: user.avatar,
     });
 
     const baseMint = Keypair.generate();
