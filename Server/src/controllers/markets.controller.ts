@@ -41,8 +41,8 @@ async function getMarketOwner(c: Context<AppEnv>) {
   return user ?? null;
 }
 
-/** POST body: [{ marketType, paymentType, amount }]. */
-export async function createMarket(c: Context<AppEnv>) {
+/** POST /markets/launch: launch a token and create the initial services. */
+export async function launchMarket(c: Context<AppEnv>) {
   const parsed = marketsSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     return c.json(
@@ -70,7 +70,7 @@ export async function createMarket(c: Context<AppEnv>) {
       .limit(1);
 
     if (existingMarket || user.token) {
-      return c.json({ success: false, message: "Market already exists" }, 409);
+      return c.json({ success: false, message: "Market already launched" }, 409);
     }
 
     const [social] = await db
@@ -96,7 +96,9 @@ export async function createMarket(c: Context<AppEnv>) {
     }
     const configAddress = new PublicKey(CONFIG_ADDRESS);
     const config = await dbc.state.getPoolConfig(configAddress);
+
     if (!config) throw new Error("Pool config not found");
+
     const { metadataUri } = await createTokenMetadataUri({
       name,
       symbol,
@@ -105,6 +107,7 @@ export async function createMarket(c: Context<AppEnv>) {
     });
 
     const baseMint = Keypair.generate();
+
     const poolAddress = deriveDbcPoolAddress(
       config.quoteMint,
       baseMint.publicKey,
@@ -119,8 +122,8 @@ export async function createMarket(c: Context<AppEnv>) {
       payer: signer.publicKey,
       poolCreator: signer.publicKey,
     });
-    transaction.feePayer = signer.publicKey;
 
+    transaction.feePayer = signer.publicKey;
     const signature = await sendAndConfirmTransaction(
       connection,
       transaction,
@@ -156,12 +159,55 @@ export async function createMarket(c: Context<AppEnv>) {
       201,
     );
   } catch (error) {
+    console.error("Launch market error:", error);
+    return c.json({ success: false, message: "Failed to launch market" }, 500);
+  }
+}
+
+/** POST /markets: add services to an already launched market. */
+export async function createMarket(c: Context<AppEnv>) {
+  const parsed = marketsSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json({
+      success: false,
+      message: parsed.error.issues[0]?.message ?? "Invalid market",
+    }, 400);
+  }
+
+  try {
+    const user = await getMarketOwner(c);
+    if (!user) {
+      return c.json({ success: false, message: "Authenticated profile is required" }, 401);
+    }
+    if (!user.token) {
+      return c.json({ success: false, message: "Launch your market first" }, 409);
+    }
+
+    const marketTypes = parsed.data.map((item) => item.marketType);
+    const [existingMarket] = await db.select({ id: markets.id })
+      .from(markets)
+      .where(and(eq(markets.userId, user.id), inArray(markets.marketType, marketTypes)))
+      .limit(1);
+    if (existingMarket) {
+      return c.json({ success: false, message: "One or more market types already exist" }, 409);
+    }
+
+    const createdMarkets = await db.insert(markets).values(
+      parsed.data.map((item) => ({
+        userId: user.id,
+        marketType: item.marketType,
+        paymentType: item.paymentType,
+        amount: item.amount.toString(),
+      })),
+    ).returning();
+    return c.json({ success: true, markets: createdMarkets }, 201);
+  } catch (error) {
     console.error("Create market error:", error);
     return c.json({ success: false, message: "Failed to create market" }, 500);
   }
 }
 
-/** PATCH /me body: [{ marketType, paymentType, amount }]. */
+/** PATCH /markets body: [{ marketType, paymentType, amount }]. */
 export async function updateMarket(c: Context<AppEnv>) {
   const parsed = marketsSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
