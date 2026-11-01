@@ -67,6 +67,16 @@ export type ReplyDMResponse = {
   message: ChatMessage;
 };
 
+export type RefundDMInput = {
+  transaction: string;
+};
+
+export type RefundDMResponse = {
+  success: boolean;
+  request: unknown;
+  signature: string | null;
+};
+
 
 export async function getChats(accessToken: string): Promise<Chat[]> {
   const response = await api<{ chats: Chat[] }>("/chats", {
@@ -136,6 +146,22 @@ export async function replyDM(
 ): Promise<ReplyDMResponse> {
   return api<ReplyDMResponse>(
     `/chats/${encodeURIComponent(chatId)}/reply`,
+    {
+      method: "POST",
+      accessToken,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function refundDM(
+  accessToken: string,
+  chatId: string,
+  input: RefundDMInput,
+): Promise<RefundDMResponse> {
+  return api<RefundDMResponse>(
+    `/chats/${encodeURIComponent(chatId)}/refund`,
     {
       method: "POST",
       accessToken,

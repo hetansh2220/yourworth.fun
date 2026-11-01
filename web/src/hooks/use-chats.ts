@@ -22,6 +22,9 @@ import {
   replyDM,
   type ReplyDMInput,
   type ReplyDMResponse,
+  refundDM,
+  type RefundDMInput,
+  type RefundDMResponse,
 } from "@/utils/api/chats";
 
 export const chatsQueryKey = ["chats"] as const;
@@ -154,6 +157,38 @@ export function useReplyDM(
       const accessToken = await getAccessToken();
       if (!accessToken) throw missingTokenError();
       return replyDM(accessToken, chatId, input);
+    },
+    onSuccess: async (result, variables, onMutateResult, context) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: chatsQueryKey }),
+        queryClient.invalidateQueries({
+          queryKey: chatMessagesQueryKey(variables.chatId),
+        }),
+      ]);
+      await options?.onSuccess?.(result, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useRefundDM(
+  options?: Omit<
+    UseMutationOptions<
+      RefundDMResponse,
+      Error,
+      { chatId: string; input: RefundDMInput }
+    >,
+    "mutationFn"
+  >,
+) {
+  const { getAccessToken } = usePrivy();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    ...options,
+    mutationFn: async ({ chatId, input }) => {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw missingTokenError();
+      return refundDM(accessToken, chatId, input);
     },
     onSuccess: async (result, variables, onMutateResult, context) => {
       await Promise.all([

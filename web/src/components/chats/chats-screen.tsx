@@ -7,6 +7,7 @@ import {
   useChats,
   useMessages,
   useReplyDM,
+  useRefundDM,
 } from "@/hooks/use-chats";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import {
   useSignTransaction,
   useWallets as useSolanaWallets,
 } from "@privy-io/react-auth/solana";
+import { refundOrder } from "@/utils/solana/orders";
 
 export function ChatsScreen() {
   const { data: chats = [], isLoading, isError } = useChats();
@@ -58,6 +60,7 @@ export function ChatsScreen() {
   const socketRef = useRef<WebSocket | null>(null);
   const { getAccessToken } = usePrivy();
   const { data: profile } = useProfile();
+  const refundDMMutation = useRefundDM();
   const replyDM = useReplyDM();
   const { wallets } = useSolanaWallets();
   const activeId = selectedId ?? conversations[0]?.id;
@@ -318,6 +321,127 @@ export function ChatsScreen() {
       }
     }
 
+    async function handleRefundDM() {
+      if (!activeId || !profile || selected?.type !== "DM") return;
+      try {
+        const admin = new web3.PublicKey(
+          "EEjBLRkRAxMUX1dmeNhBkZN7FwbfLuV5xUXmguUUCZ7r",
+        );
+        const mint = new web3.PublicKey(
+          "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+        );
+        const participantWallet = wallets[0];
+        const walletAddress = participantWallet?.address?.trim();
+        if (!walletAddress) {
+          throw new Error("Connected Solana wallet is not available");
+        }
+
+        let participant: web3.PublicKey;
+        try {
+          participant = new web3.PublicKey(walletAddress);
+        } catch {
+          throw new Error("Your profile has an invalid Solana wallet address");
+        }
+        const solanaConnection = new web3.Connection(
+          process.env.NEXT_PUBLIC_SOLANA_RPC_URL!,
+          "confirmed",
+        );
+
+        const orderId = new Uint8Array(32);
+        const authorityEpoch = new BN(0);
+
+        const refundInput = {
+          admin,
+          participant,
+          mint,
+          orderId,
+          authorityEpoch,
+        };
+
+        const anchorWallet = {
+          publicKey: participant,
+          signTransaction: async <T,>(transaction: T) => transaction,
+        } as Wallet;
+
+        const instruction = await refundOrder(anchorWallet, refundInput);
+
+        const transaction = new web3.Transaction().add(instruction);
+        transaction.feePayer = new web3.PublicKey(
+          "EEjBLRkRAxMUX1dmeNhBkZN7FwbfLuV5xUXmguUUCZ7r",
+        );
+
+        transaction.recentBlockhash = (
+          await solanaConnection.getLatestBlockhash("confirmed")
+        ).blockhash;
+        const unsignedTransaction = transaction.serialize({
+          requireAllSignatures: false,
+          verifySignatures: false,
+        });
+
+        const { signedTransaction } = await signTransaction({
+          transaction: unsignedTransaction,
+          wallet: participantWallet,
+          chain: "solana:devnet",
+        });
+
+        console.log("Refund transaction signed:", {
+          participant: participant.toBase58(),
+          orderId: Array.from(orderId),
+          signedTransactionBytes: signedTransaction.length,
+          signedTransaction,
+        });
+
+        const signedTx = web3.Transaction.from(signedTransaction);
+
+        const participantSignature = signedTx.signatures.find((entry) =>
+          entry.publicKey.equals(participant),
+        )?.signature;
+
+        if (!participantSignature) {
+          throw new Error("Participant signature missing");
+        }
+
+        const signatureId =
+          Buffer.from(participantSignature).toString("base64");
+
+        const signedTransactionBase64 = Buffer.from(
+          signedTx.serialize({
+            requireAllSignatures: false,
+            verifySignatures: false,
+          }),
+        ).toString("base64");
+
+        console.log("dsds", {
+          signatureId,
+          signedTransaction: signedTransactionBase64,
+        });
+
+        refundDMMutation.mutate(
+          {
+            chatId: activeId,
+            input: {
+              transaction: signedTransactionBase64,
+            },
+          },
+          {
+            onSuccess: (result) => {
+              console.log("Refund successful:", result.signature);
+            },
+            onError: (error) => {
+              console.error("Refund failed:", error);
+            },
+          },
+        );
+      } catch (error) {
+        console.error("Failed to sign refund transaction:", error);
+      }
+    }
+
+    if (text === "__refund_dm__") {
+      void handleRefundDM();
+      return;
+    }
+
     if (selected?.type === "DM") {
       void replyToDM();
       return;
@@ -379,6 +503,16 @@ export function ChatsScreen() {
             <h2 className="min-w-0 flex-1 truncate font-medium">
               {selected?.name ?? "Chats"}
             </h2>
+            {selected?.type === "DM" && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => sendMessage("__refund_dm__")}
+                disabled={refundDMMutation.isPending}
+              >
+                {refundDMMutation.isPending ? "Refunding…" : "Refund"}
+              </Button>
+            )}
             {selected?.type === "GROUP" && (
               <GrpMembersDialog members={dialogMembers}>
                 <Button
