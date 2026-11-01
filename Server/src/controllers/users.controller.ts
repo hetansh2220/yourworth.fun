@@ -245,6 +245,7 @@ export async function getUsers(c: Context<AppEnv>) {
     id: users.id,
     username: users.username,
     name: users.name,
+    walletAddress: users.address,
     avatar: users.avatar,
     bio: users.bio,
     verified: users.verified,

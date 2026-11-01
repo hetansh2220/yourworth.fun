@@ -48,7 +48,7 @@ export function ProfileOverview({ username, minutePrice = 0.12, messagePrice = 1
         <h2 id="profile-overview-heading" className="text-2xl font-medium">Get access to {username}</h2>
         <p className="text-base text-muted-foreground">Use your purchased minutes to connect with {username}</p>
       </div>
-      <DirectMessageDialog userId={profile?.id ?? ""} username={username} minutePrice={minutePrice} messagePrice={messagePrice}>
+      <DirectMessageDialog userId={profile?.id ?? ""} username={username} creatorWalletAddress={profile?.walletAddress} minutePrice={minutePrice} messagePrice={messagePrice}>
       <AccessCard
         icon={<ChatCircleDotsIcon size={26} aria-hidden="true" />}
         title="Direct Message"

@@ -46,9 +46,23 @@ export type MessagesResponse = {
 export type CreateDMInput = {
   userId: string;
   message: string;
+  transactionSignature?: string;
+  signatureId?: string;
+  signedTransaction?: string;
 };
 
 export type CreateDMResponse = {
+  chat: Chat;
+  message: ChatMessage;
+};
+
+export type ReplyDMInput = {
+  message: string;
+  signatureId?: string;
+  signedTransaction?: string;
+};
+
+export type ReplyDMResponse = {
   chat: Chat;
   message: ChatMessage;
 };
@@ -112,4 +126,21 @@ export async function createDM(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
+}
+
+/** Reply to an existing DM conversation. */
+export async function replyDM(
+  accessToken: string,
+  chatId: string,
+  input: ReplyDMInput,
+): Promise<ReplyDMResponse> {
+  return api<ReplyDMResponse>(
+    `/chats/${encodeURIComponent(chatId)}/reply`,
+    {
+      method: "POST",
+      accessToken,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
 }
