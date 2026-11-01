@@ -19,7 +19,7 @@ app.use(
   "*",
   cors({
     origin: clientOrigin,
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "X_BEARER_TOKEN"],
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   }),
 );

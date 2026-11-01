@@ -12,6 +12,44 @@ const pending = new Map<
   { userId: string; verifier: string; expiresAt: number }
 >();
 
+const callbackSchema = z.object({
+  code: z.string().min(1),
+  state: z.string().min(1),
+});
+
+const tokenSchema = z.object({ access_token: z.string().min(1) });
+
+const profileSchema = z.object({
+  data: z.object({
+    id: z.string().min(1),
+    username: z.string().min(1),
+    verified: z.boolean().optional(),
+  }),
+});
+
+const twitterUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  username: z.string(),
+  profile_image_url: z.string().optional(),
+  description: z.string().optional(),
+  location: z.string().optional(),
+  url: z.string().optional(),
+  created_at: z.string().optional(),
+  verified: z.boolean().optional(),
+  verified_type: z.string().optional(),
+  protected: z.boolean().optional(),
+  public_metrics: z
+    .object({
+      followers_count: z.number(),
+      following_count: z.number(),
+      tweet_count: z.number().optional(),
+      post_count: z.number().optional(),
+      listed_count: z.number(),
+    })
+    .optional(),
+});
+
 function getConfig() {
   const { X_CLIENT_ID, X_CLIENT_SECRET, X_REDIRECT_URI } = process.env;
   if (!X_CLIENT_ID || !X_CLIENT_SECRET || !X_REDIRECT_URI) {
@@ -75,27 +113,13 @@ export async function connectTwitter(c: Context<AppEnv>) {
   }
 }
 
-const callbackSchema = z.object({
-  code: z.string().min(1).max(4096),
-  state: z.string().min(1).max(500),
-});
-const tokenSchema = z.object({ access_token: z.string().min(1) });
-const profileSchema = z.object({
-  data: z.object({
-    id: z.string().min(1),
-    username: z.string().min(1),
-    verified: z.boolean().optional(),
-  }),
-});
-
 export async function twitterCallback(c: Context<AppEnv>) {
   c.header("Cache-Control", "no-store");
   const parsed = callbackSchema.safeParse({
     code: c.req.query("code"),
     state: c.req.query("state"),
   });
-  if (!parsed.success)
-    return c.text("Invalid Twitter callback", 400);
+  if (!parsed.success) return c.text("Invalid Twitter callback", 400);
   try {
     const config = getConfig();
     const flow = pending.get(parsed.data.state);
@@ -126,10 +150,13 @@ export async function twitterCallback(c: Context<AppEnv>) {
         502,
       );
     const token = tokenSchema.parse(await tokenResponse.json());
-    const profileResponse = await fetch("https://api.x.com/2/users/me?user.fields=verified", {
-      headers: { Authorization: `Bearer ${token.access_token}` },
-      signal: AbortSignal.timeout(15000),
-    });
+    const profileResponse = await fetch(
+      "https://api.x.com/2/users/me?user.fields=verified",
+      {
+        headers: { Authorization: `Bearer ${token.access_token}` },
+        signal: AbortSignal.timeout(15000),
+      },
+    );
     if (!profileResponse.ok)
       return c.json(
         { success: false, message: "Failed to retrieve Twitter profile" },
@@ -137,13 +164,15 @@ export async function twitterCallback(c: Context<AppEnv>) {
       );
     const { data: profile } = profileSchema.parse(await profileResponse.json());
     await db.batch([
-      db.insert(socials)
+      db
+        .insert(socials)
         .values({ userId: flow.userId, twitterUsername: profile.username })
         .onConflictDoUpdate({
           target: socials.userId,
           set: { twitterUsername: profile.username, updatedAt: new Date() },
         }),
-      db.update(users)
+      db
+        .update(users)
         .set({ verified: profile.verified === true, updatedAt: new Date() })
         .where(eq(users.id, flow.userId)),
     ]);
@@ -154,4 +183,55 @@ export async function twitterCallback(c: Context<AppEnv>) {
     console.error("Twitter callback error:", error);
     return c.text("Failed to connect Twitter. Start again.", 500);
   }
+}
+
+/** Fetches a public X profile using the app bearer token. */
+export async function getTwitterUser(username: string, bearerToken: string) {
+  const accessToken = bearerToken.trim();
+  if (!accessToken) throw new Error("Missing X_BEARER_TOKEN");
+  if (!/^[a-zA-Z0-9_]{1,15}$/.test(username))
+    throw new Error("Invalid Twitter username");
+
+  const url = new URL(
+    `https://api.x.com/2/users/by/username/${encodeURIComponent(username)}`,
+  );
+
+  url.searchParams.set(
+    "user.fields",
+    "name,username,profile_image_url,description,location,url,created_at,verified,verified_type,protected,public_metrics",
+  );
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Twitter user (${response.status})`);
+  }
+
+  const { data: user } = z
+    .object({ data: twitterUserSchema })
+    .parse(await response.json());
+
+  return {
+    id: user.id,
+    name: user.name,
+    username: user.username,
+    profilePicture: user.profile_image_url ?? null,
+    bio: user.description ?? null,
+    location: user.location ?? null,
+    website: user.url ?? null,
+    createdAt: user.created_at ?? null,
+    verified: user.verified ?? false,
+    verifiedType: user.verified_type ?? null,
+    protected: user.protected ?? false,
+    followers: user.public_metrics?.followers_count ?? null,
+    following: user.public_metrics?.following_count ?? null,
+    posts:
+      user.public_metrics?.post_count ??
+      user.public_metrics?.tweet_count ??
+      null,
+    listedCount: user.public_metrics?.listed_count ?? null,
+  };
 }

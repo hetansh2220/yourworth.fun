@@ -3,8 +3,17 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { markets, marketSchema, users } from "@/db/schema";
+import { markets, marketSchema, socials, users } from "@/db/schema";
 import type { AppEnv } from "@/types/app";
+import { Keypair, PublicKey, sendAndConfirmTransaction } from "@solana/web3.js";
+import { deriveDbcPoolAddress } from "@meteora-ag/dynamic-bonding-curve-sdk";
+import { CONFIG_ADDRESS } from "@/constants";
+import { getTwitterUser } from "@/helpers/twitter.helper";
+import { createTokenMetadataUri } from "@/helpers/pinata.helper";
+import { createPool } from "@/helpers/meteora.helpers";
+import connection from "@/lib/connection";
+import dbc from "@/lib/dbc";
+import signer from "@/lib/signer";
 
 const marketsSchema = z
   .array(marketSchema)
@@ -16,20 +25,15 @@ const marketsSchema = z
     { message: "Each market type can only appear once" },
   );
 
-function isDuplicateMarket(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) return false;
-  if ("code" in error && error.code === "23505") return true;
-  return (
-    "cause" in error && error.cause !== error && isDuplicateMarket(error.cause)
-  );
-}
-
 async function getMarketOwner(c: Context<AppEnv>) {
   const address = c.get("walletAddress");
   if (!address) return null;
 
   const [user] = await db
-    .select({ id: users.id })
+    .select({
+      id: users.id,
+      token: users.token,
+    })
     .from(users)
     .where(eq(users.address, address))
     .limit(1);
@@ -51,32 +55,114 @@ export async function createMarket(c: Context<AppEnv>) {
 
   try {
     const user = await getMarketOwner(c);
+
     if (!user)
       return c.json(
         { success: false, message: "Authenticated profile is required" },
         401,
       );
 
-    const createdMarkets = await db
-      .insert(markets)
-      .values(
-        parsed.data.map((item) => ({
-          userId: user.id,
-          marketType: item.marketType,
-          paymentType: item.paymentType,
-          amount: item.amount.toString(),
-        })),
-      )
-      .returning();
+    const [existingMarket] = await db
+      .select({ id: markets.id })
+      .from(markets)
+      .where(eq(markets.userId, user.id))
+      .limit(1);
 
-    return c.json({ success: true, markets: createdMarkets }, 201);
-  } catch (error) {
-    if (isDuplicateMarket(error)) {
+    if (existingMarket || user.token) {
+      return c.json({ success: false, message: "Market already exists" }, 409);
+    }
+
+    const [social] = await db
+      .select({ username: socials.twitterUsername })
+      .from(socials)
+      .where(eq(socials.userId, user.id))
+      .limit(1);
+    if (!social?.username) {
       return c.json(
-        { success: false, message: "One or more market types already exist" },
-        409,
+        { success: false, message: "Connect Twitter before creating a market" },
+        400,
       );
     }
+
+    const twitterBearerToken = c.req.header("X_BEARER_TOKEN")?.trim();
+    if (!twitterBearerToken) {
+      return c.json(
+        { success: false, message: "X_BEARER_TOKEN header is required" },
+        400,
+      );
+    }
+    const profile = await getTwitterUser(social.username, twitterBearerToken);
+    const name = `${profile.username}'s Time`;
+    // SPL metadata symbols allow at most ten bytes.
+    const symbol = profile.username.toUpperCase().slice(0, 10);
+    if (!profile.profilePicture) {
+      return c.json(
+        { success: false, message: "Twitter profile picture is required" },
+        400,
+      );
+    }
+    const configAddress = new PublicKey(CONFIG_ADDRESS);
+    const config = await dbc.state.getPoolConfig(configAddress);
+    if (!config) throw new Error("Pool config not found");
+    const { metadataUri } = await createTokenMetadataUri({
+      name,
+      symbol,
+      description: profile.bio ?? name,
+      imageUrl: profile.profilePicture,
+    });
+
+    const baseMint = Keypair.generate();
+    const poolAddress = deriveDbcPoolAddress(
+      config.quoteMint,
+      baseMint.publicKey,
+      configAddress,
+    );
+
+    const transaction = await createPool({
+      name,
+      symbol,
+      uri: metadataUri,
+      baseMint: baseMint.publicKey,
+      payer: signer.publicKey,
+      poolCreator: signer.publicKey,
+    });
+    transaction.feePayer = signer.publicKey;
+
+    const signature = await sendAndConfirmTransaction(
+      connection,
+      transaction,
+      [signer, baseMint],
+      {
+        commitment: "confirmed",
+      },
+    );
+
+    const [createdMarkets] = await db.batch([
+      db
+        .insert(markets)
+        .values(
+          parsed.data.map((item) => ({
+            userId: user.id,
+            marketType: item.marketType,
+            paymentType: item.paymentType,
+            amount: item.amount.toString(),
+          })),
+        )
+        .returning(),
+      db
+        .update(users)
+        .set({
+          token: baseMint.publicKey.toBase58(),
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id)),
+    ]);
+
+    return c.json(
+      { success: true, markets: createdMarkets, signature, metadataUri },
+      201,
+    );
+  } catch (error) {
     console.error("Create market error:", error);
     return c.json({ success: false, message: "Failed to create market" }, 500);
   }

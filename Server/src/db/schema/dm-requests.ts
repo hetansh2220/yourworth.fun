@@ -133,7 +133,13 @@ export const createDmRequestSchema = createInsertSchema(dmRequests)
     expiresAt: true,
   })
   .extend({
-    requestId: z.string().regex(/^\d+$/).refine((value) => BigInt(value) < (1n << 256n), "Order ID must fit 32 bytes"),
+    requestId: z
+      .string()
+      .regex(/^\d+$/)
+      .refine(
+        (value) => BigInt(value) < 1n << 256n,
+        "Order ID must fit 32 bytes",
+      ),
     requestPda: z.string().trim().min(32),
     escrowTokenAccount: z.string().trim().min(32),
     messageId: z.string().uuid().optional(),
