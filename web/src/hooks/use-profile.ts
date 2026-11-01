@@ -51,12 +51,12 @@ function missingTokenError() {
     return new Error("Your session is unavailable. Please try again.");
 }
 
-export function useMySocials() {
+export function useMySocials({ enabled = true }: { enabled?: boolean } = {}) {
     const { ready, authenticated, getAccessToken } = usePrivy();
 
     return useQuery<Socials | null, Error>({
         queryKey: socialsQueryKey,
-        enabled: ready && authenticated,
+        enabled: ready && authenticated && enabled,
         queryFn: async () => {
             const accessToken = await getAccessToken();
             if (!accessToken) throw missingTokenError();
@@ -171,9 +171,11 @@ export function useProfile(
     });
 }
 
+type CreateProfileInput = Omit<CreateUserInput, "avatar"> & { avatar: File | string };
+
 export function useCreateProfile(
     options?: Omit<
-        UseMutationOptions<User, Error, CreateUserInput>,
+        UseMutationOptions<User, Error, CreateProfileInput>,
         "mutationFn"
     >,
 ) {
@@ -183,7 +185,7 @@ export function useCreateProfile(
 
     return useMutation({
         ...options,
-        mutationFn: async (input: CreateUserInput) => {
+        mutationFn: async (input: CreateProfileInput) => {
             const accessToken = await getAccessToken();
             if (!accessToken) throw missingTokenError();
             const avatar =

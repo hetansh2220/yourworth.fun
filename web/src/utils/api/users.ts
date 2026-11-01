@@ -2,17 +2,16 @@ import { api } from "@/lib/api";
 
 export type User = {
   id: string;
-  privyUserId: string;
   username: string;
   name: string;
-  walletAddress: string;
+  address: string;
   avatar: string;
   bio: string;
   token: string | null;
   createdAt: string;
   updatedAt: string;
   verified: boolean;
-  socials: {
+  socials?: {
     twitterUsername: string | null;
     instagramUsername: string | null;
     youtubeUsername: string | null;
@@ -23,7 +22,7 @@ export type CreateUserInput = {
   username: string;
   name: string;
   bio: string;
-  avatar: File | string;
+  avatar: string;
 };
 
 export type UpdateUserInput = {
@@ -44,30 +43,11 @@ export async function createUser(
   accessToken: string,
   input: CreateUserInput,
 ): Promise<User> {
-  const body =
-    input.avatar instanceof File
-      ? (() => {
-          const formData = new FormData();
-          formData.set("username", input.username);
-          formData.set("name", input.name.trim());
-          formData.set("bio", input.bio);
-          formData.set("avatar", input.avatar);
-          return formData;
-        })()
-      : JSON.stringify({
-          username: input.username,
-          name: input.name.trim(),
-          bio: input.bio,
-          avatar: input.avatar,
-        });
-
   const response = await api<{ user: User }>("/users", {
     method: "POST",
     accessToken,
-    ...(typeof body === "string"
-      ? { headers: { "Content-Type": "application/json" } }
-      : {}),
-    body,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...input, name: input.name.trim() }),
   });
   return response.user;
 }
@@ -93,8 +73,12 @@ export async function getUser(accessToken: string): Promise<User> {
   return response.user;
 }
 
+export type PublicUser = Pick<User,
+  "id" | "username" | "name" | "avatar" | "bio" | "verified" | "createdAt" | "socials"
+> & { walletAddress: string };
+
 export type UsersResponse = {
-  users: User[];
+  users: PublicUser[];
   nextCursor: string | null;
 };
 

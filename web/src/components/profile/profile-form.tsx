@@ -31,7 +31,7 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
   const createProfile = useCreateProfile();
   const updateProfile = useUpdateProfile();
   const connectTwitterMutation = useConnectTwitter();
-  const { data: socials } = useMySocials();
+  const { data: socials } = useMySocials({ enabled: !isCreate });
   const twitterConnected = Boolean(socials?.twitterUsername);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -46,7 +46,7 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
       : { name: "", username: "", bio: "", image: "" };
   const [saved, setSaved] = useState(startingProfile);
   const [profile, setProfile] = useState(startingProfile);
-  const [, setStatus] = useState("");
+  const [status, setStatus] = useState("");
   const [photoError, setPhotoError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const photoRequest = useRef(0);
@@ -353,6 +353,11 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                   {profile.bio.length} / 160
                 </p>
               </div>
+              {status && (
+                <p role="alert" className="text-sm text-destructive">
+                  {status}
+                </p>
+              )}
               <div className="flex flex-wrap justify-end gap-3">
                 <Button
                   type="submit"

@@ -128,7 +128,6 @@ export async function getWatchlist(c: Context<AppEnv>) {
           bio: users.bio,
           verified: users.verified,
           token: users.token,
-          poolAddress: users.poolAddress,
         },
       })
       .from(watchlist)
