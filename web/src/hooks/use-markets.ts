@@ -10,6 +10,7 @@ import {
 import { usePrivy } from "@privy-io/react-auth";
 import {
   createMarkets,
+  launchMarkets,
   getMarket,
   getMyMarkets,
   updateMarkets,
@@ -76,6 +77,30 @@ export function useCreateMarkets(
       return createMarkets(accessToken, input);
     },
     onSuccess: async (markets, variables, onMutateResult, context) => {
+      queryClient.setQueryData<Market[]>(myMarketsQueryKey, (current = []) => {
+        const incoming = new Map(markets.map((market) => [market.marketType, market]));
+        return [...current.filter((market) => !incoming.has(market.marketType)), ...markets];
+      });
+      await queryClient.invalidateQueries({ queryKey: myMarketsQueryKey });
+      await options?.onSuccess?.(markets, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useLaunchMarkets(
+  options?: Omit<UseMutationOptions<Market[], Error, MarketInput[]>, "mutationFn">,
+) {
+  const queryClient = useQueryClient();
+  const { getAccessToken } = usePrivy();
+
+  return useMutation({
+    ...options,
+    mutationFn: async (input: MarketInput[]) => {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw missingTokenError();
+      return launchMarkets(accessToken, input);
+    },
+    onSuccess: async (markets, variables, onMutateResult, context) => {
       queryClient.setQueryData(myMarketsQueryKey, markets);
       await queryClient.invalidateQueries({ queryKey: myMarketsQueryKey });
       await options?.onSuccess?.(markets, variables, onMutateResult, context);
@@ -100,7 +125,10 @@ export function useUpdateMarkets(
       return updateMarkets(accessToken, input);
     },
     onSuccess: async (markets, variables, onMutateResult, context) => {
-      queryClient.setQueryData(myMarketsQueryKey, markets);
+      queryClient.setQueryData<Market[]>(myMarketsQueryKey, (current = []) => {
+        const incoming = new Map(markets.map((market) => [market.marketType, market]));
+        return [...current.filter((market) => !incoming.has(market.marketType)), ...markets];
+      });
       await queryClient.invalidateQueries({ queryKey: myMarketsQueryKey });
       await options?.onSuccess?.(markets, variables, onMutateResult, context);
     },
