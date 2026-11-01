@@ -33,7 +33,6 @@ async function getMarketOwner(c: Context<AppEnv>) {
     .select({
       id: users.id,
       token: users.token,
-      poolAddress: users.poolAddress,
     })
     .from(users)
     .where(eq(users.address, address))
@@ -68,7 +67,8 @@ export async function createMarket(c: Context<AppEnv>) {
       .from(markets)
       .where(eq(markets.userId, user.id))
       .limit(1);
-    if (existingMarket || user.token || user.poolAddress) {
+
+    if (existingMarket || user.token) {
       return c.json({ success: false, message: "Market already exists" }, 409);
     }
 
@@ -86,7 +86,10 @@ export async function createMarket(c: Context<AppEnv>) {
 
     const twitterBearerToken = c.req.header("X_BEARER_TOKEN")?.trim();
     if (!twitterBearerToken) {
-      return c.json({ success: false, message: "X_BEARER_TOKEN header is required" }, 400);
+      return c.json(
+        { success: false, message: "X_BEARER_TOKEN header is required" },
+        400,
+      );
     }
     const profile = await getTwitterUser(social.username, twitterBearerToken);
     const name = `${profile.username}'s Time`;
@@ -150,8 +153,6 @@ export async function createMarket(c: Context<AppEnv>) {
         .update(users)
         .set({
           token: baseMint.publicKey.toBase58(),
-          poolAddress: poolAddress.toBase58(),
-          configAddress: CONFIG_ADDRESS,
           updatedAt: new Date(),
         })
         .where(eq(users.id, user.id)),

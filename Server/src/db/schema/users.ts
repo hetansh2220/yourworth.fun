@@ -30,10 +30,6 @@ export const users = pgTable("users", {
 
   token: text("token").default(""),
 
-  poolAddress: text("pool_address"),
-
-  configAddress: text("config_address"),
-
   createdAt: timestamp("created_at", {
     withTimezone: true,
   })
