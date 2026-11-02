@@ -1,4 +1,5 @@
 import { Leaderboard, type LeaderboardEntry } from "@/components/earnings/leaderboard";
+import { LeaderboardSkeleton } from "@/components/skeleton/leaderboard-skeleton";
 
 const spenders: LeaderboardEntry[] = [
   { name: "Demi Wilkinson", initials: "DW", wallet: "0xA620…3F18", amount: 42800 },
@@ -8,6 +9,7 @@ const spenders: LeaderboardEntry[] = [
   { name: "Phoenix Baker", initials: "PB", wallet: "0x8F32…B671", amount: 18750 },
 ];
 
-export function TopSpenders() {
+export function TopSpenders({ isLoading = false }: { isLoading?: boolean }) {
+  if (isLoading) return <LeaderboardSkeleton title="Top Spenders" />;
   return <Leaderboard title="Top Spenders" amountLabel="Total spent" entries={spenders} />;
 }
