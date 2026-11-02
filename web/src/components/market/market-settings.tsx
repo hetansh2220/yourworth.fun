@@ -2,7 +2,7 @@
 
 import { ServiceCard } from "@/components/market/service-card";
 import { useCreateMarkets, useLaunchMarkets, useMyMarkets, useUpdateMarkets } from "@/hooks/use-markets";
-import { useConnectTwitter, useMySocials } from "@/hooks/use-profile";
+import { useConnectTwitter, useMySocials } from "@/hooks/use-socials";
 import type { MarketInput, MarketType } from "@/utils/api/markets";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
