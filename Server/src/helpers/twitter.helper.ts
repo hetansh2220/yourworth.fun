@@ -177,7 +177,7 @@ export async function twitterCallback(c: Context<AppEnv>) {
         .where(eq(users.id, flow.userId)),
     ]);
     return c.redirect(
-      `http://localhost:3000/settings/profile?twitter=connected&verified=${profile.verified}`,
+      `http://localhost:3000/settings/market?twitter=connected&verified=${profile.verified}`,
     );
   } catch (error) {
     console.error("Twitter callback error:", error);

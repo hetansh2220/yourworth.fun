@@ -16,7 +16,7 @@ export default function Home() {
         <TransactionHistory />
       </div>
       <div className="min-w-0 space-y-4">
-        <TotalBalance depositAddress="7sQArAHvjCjVNJ97VoBZREY1pE2VvWJ1CsGiKsBSQHTh" />
+        <TotalBalance />
         <CryptoWatchlist />
       </div>
     </main>

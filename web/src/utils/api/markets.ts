@@ -47,6 +47,19 @@ export async function createMarkets(
   return response.markets;
 }
 
+export async function launchMarkets(
+  accessToken: string,
+  input: MarketInput[],
+): Promise<Market[]> {
+  const response = await api<MarketsResponse>("/markets/launch", {
+    method: "POST",
+    accessToken,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return response.markets;
+}
+
 export async function updateMarkets(
   accessToken: string,
   input: MarketInput[],

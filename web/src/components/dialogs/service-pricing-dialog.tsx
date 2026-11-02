@@ -10,11 +10,13 @@ import { cn } from "@/lib/utils";
 
 export type ServicePricing = { unit: "usdc" | "minutes" | "holders"; amount: number };
 
-export function ServicePricingDialog({ type, value, onSave, triggerClassName }: {
+export function ServicePricingDialog({ type, value, onSave, triggerClassName, triggerLabel, title }: {
   type: "dms" | "group";
   value: ServicePricing;
   onSave: (value: ServicePricing) => void;
   triggerClassName?: string;
+  triggerLabel?: string;
+  title?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [unit, setUnit] = useState(value.unit);
@@ -26,11 +28,11 @@ export function ServicePricingDialog({ type, value, onSave, triggerClassName }: 
 
   return (
     <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (next) { setUnit(value.unit); setAmount(String(value.amount)); } }}>
-      <DialogTrigger render={<Button variant="outline" className={triggerClassName} />}><PencilSimpleIcon aria-hidden="true" />Edit</DialogTrigger>
+      <DialogTrigger render={<Button variant="outline" className={triggerClassName} />}><PencilSimpleIcon aria-hidden="true" />{triggerLabel ?? "Edit"}</DialogTrigger>
       <DialogContent showCloseButton={false} className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl p-6 sm:max-w-lg">
         <DialogHeader className="gap-2">
           <div className="flex items-center justify-between gap-4">
-            <DialogTitle className="text-xl">{isGroup ? "Add group chat option" : "Edit direct message pricing"}</DialogTitle>
+            <DialogTitle className="text-xl">{title ?? (isGroup ? "Add group chat option" : "Edit direct message pricing")}</DialogTitle>
             <DialogClose render={<Button variant="ghost" size="icon" className="size-9 rounded-lg border border-border" />} aria-label="Close"><XIcon className="size-5" aria-hidden="true" /></DialogClose>
           </div>
           <DialogDescription className="text-sm">{isGroup ? "Choose how you want to price your group chat." : "Set your price in fixed USDC or fixed minutes."}</DialogDescription>

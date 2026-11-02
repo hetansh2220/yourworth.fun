@@ -4,6 +4,7 @@ export type User = {
   id: string;
   username: string;
   name: string;
+  walletAddress: string;
   address: string;
   avatar: string;
   bio: string;

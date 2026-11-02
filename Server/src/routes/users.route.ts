@@ -18,5 +18,5 @@ usersRoute.get("/availability", checkUsernameAvailability);
 usersRoute.get("/me", authMiddleware, getMe);
 usersRoute.patch("/me", authMiddleware, updateUser);
 usersRoute.post("/", authMiddleware, createUser);
-usersRoute.get("/:token", getUserByToken);
 usersRoute.get("/balance", authMiddleware, getUserBalance);
+usersRoute.get("/:token", getUserByToken);
