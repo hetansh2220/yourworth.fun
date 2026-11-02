@@ -5,3 +5,4 @@ export * from "@/db/schema/dm-requests";
 export * from "@/db/schema/reviews";
 export * from "@/db/schema/watchlist";
 export * from "@/db/schema/socials";
+export * from "@/db/schema/referrals";
