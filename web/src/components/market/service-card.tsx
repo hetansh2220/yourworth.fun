@@ -10,10 +10,12 @@ import { ServicePricingDialog, type ServicePricing } from "@/components/dialogs/
 
 type ServiceCardProps = {
   type: "dms" | "group";
+  active: boolean;
+  onActivate: (pricing: ServicePricing) => void;
+  isActivating?: boolean;
 };
 
-export function ServiceCard({ type }: ServiceCardProps) {
-  const [active, setActive] = useState(true);
+export function ServiceCard({ type, active, onActivate, isActivating }: ServiceCardProps) {
   const [notice, setNotice] = useState("");
   const isDms = type === "dms";
   const [pricing, setPricing] = useState<ServicePricing>({ unit: "minutes", amount: isDms ? 1 : 25 });
@@ -36,12 +38,18 @@ export function ServiceCard({ type }: ServiceCardProps) {
           <CardTitle>{isDms ? "Direct Message" : "Group Chat"}</CardTitle>
           <CardDescription className="text-base">{isDms ? "Get paid every time you answer a direct message." : "Create a group chat to connect with many users at once."}</CardDescription>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <ServicePricingDialog type={type} value={pricing} onSave={setPricing} triggerClassName={actionClass} />
-            <Button type="button" variant="outline" className={actionClass} onClick={() => {
-              setActive(!active);
-              setNotice(`${isDms ? "DMs" : "Group Chat"} ${active ? "deactivated" : "activated"} in this session.`);
-            }}>{active ? <TrashIcon aria-hidden="true" /> : <CheckIcon aria-hidden="true" />}{active ? "Deactivate" : "Activate"}</Button>
+        <div className={active ? "grid grid-cols-2 gap-2" : "grid gap-2"}>
+          <ServicePricingDialog
+            type={type}
+            value={pricing}
+            onSave={(value) => active ? setPricing(value) : onActivate(value)}
+            triggerClassName={actionClass}
+            triggerLabel={active ? "Edit" : "Activate"}
+            title={active ? undefined : `Create ${isDms ? "direct message" : "group chat"} market`}
+          />
+          {active && <Button type="button" variant="outline" className={actionClass} onClick={() => {
+            setNotice(`${isDms ? "DMs" : "Group Chat"} deactivated in this session.`);
+          }} disabled={isActivating}><TrashIcon aria-hidden="true" />Deactivate</Button>}
         </div>
           {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
       </CardContent>
