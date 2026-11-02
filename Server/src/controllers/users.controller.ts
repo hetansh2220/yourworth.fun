@@ -1,8 +1,8 @@
 import type { Context } from "hono";
-import { desc, eq, lt, getTableColumns } from "drizzle-orm";
+import { desc, eq, lt, getTableColumns, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { createUserSchema, updateUserSchema, users, socials } from "@/db/schema";
+import { createUserSchema, updateUserSchema, users, socials, referrals } from "@/db/schema";
 import type { AppEnv } from "@/types/app";
 import { PublicKey } from "@solana/web3.js";
 import { unpackAccount } from "@solana/spl-token";
@@ -15,13 +15,10 @@ const socialFields = {
   youtubeUsername: socials.youtubeUsername,
 };
 
-function getErrorCode(error: unknown) {
-  return typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    typeof error.code === "string"
-    ? error.code
-    : "";
+function getErrorCode(error: unknown): string {
+  if (typeof error !== "object" || error === null) return "";
+  if ("code" in error && typeof error.code === "string") return error.code;
+  return "cause" in error && error.cause !== error ? getErrorCode(error.cause) : "";
 }
 
 function getTokenParam(c: Context<AppEnv>) {
@@ -91,16 +88,33 @@ export async function createUser(c: Context<AppEnv>) {
       );
     }
 
-    const [newUser] = await db
-      .insert(users)
-      .values({
-        username: cleanUsername,
-        name: cleanName,
-        address: walletAddress,
-        avatar: parsedBody.data.avatar,
-        bio: cleanBio,
-      })
-      .returning();
+    const referralCode = parsedBody.data.referralCode;
+    const [referrer] = referralCode
+      ? await db.select({ id: users.id }).from(users)
+          .where(eq(users.referralCode, referralCode)).limit(1)
+      : [];
+    if (referralCode && !referrer) {
+      return c.json({ success: false, message: "Invalid referral code" }, 400);
+    }
+
+    const insertUser = db.insert(users).values({
+      username: cleanUsername,
+      name: cleanName,
+      address: walletAddress,
+      avatar: parsedBody.data.avatar,
+      bio: cleanBio,
+    }).returning();
+    const [newUser] = referrer
+      ? (await db.batch([
+          insertUser,
+          db.insert(referrals).select(
+            db.select({
+              referrerId: sql<string>`${referrer.id}::uuid`.as("referrer_id"),
+              referredUserId: users.id,
+            }).from(users).where(eq(users.address, walletAddress)),
+          ),
+        ]))[0]
+      : await insertUser;
 
     return c.json(
       {
@@ -349,7 +363,7 @@ export async function updateUser(c: Context<AppEnv>) {
     updateValues.bio = parsedBody.data.bio.trim();
   }
 
-  if (Object.keys(updateValues).length === 0) {
+  if (Object.keys(updateValues).length === 0 && !parsedBody.data.referralCode) {
     return c.json(
       {
         success: false,
@@ -394,11 +408,33 @@ export async function updateUser(c: Context<AppEnv>) {
       }
     }
 
-    const [updatedUser] = await db
-      .update(users)
+    const referralCode = parsedBody.data.referralCode;
+    const [referrer] = referralCode
+      ? await db.select({ id: users.id }).from(users)
+          .where(eq(users.referralCode, referralCode)).limit(1)
+      : [];
+    if (referralCode && !referrer) {
+      return c.json({ success: false, message: "Invalid referral code" }, 400);
+    }
+    if (referrer?.id === existingUser.id) {
+      return c.json({ success: false, message: "You cannot refer yourself" }, 400);
+    }
+    const [existingReferral] = referrer
+      ? await db.select().from(referrals)
+          .where(eq(referrals.referredUserId, existingUser.id)).limit(1)
+      : [];
+    if (existingReferral && existingReferral.referrerId !== referrer?.id) {
+      return c.json({ success: false, message: "A referrer is already assigned" }, 409);
+    }
+    const update = db.update(users)
       .set({ ...updateValues, updatedAt: new Date() })
-      .where(eq(users.address, walletAddress))
-      .returning();
+      .where(eq(users.id, existingUser.id)).returning();
+    const [updatedUser] = referrer && !existingReferral
+      ? (await db.batch([
+          update,
+          db.insert(referrals).values({ referrerId: referrer.id, referredUserId: existingUser.id }),
+        ]))[0]
+      : await update;
 
     return c.json(
       {
