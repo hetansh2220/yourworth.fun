@@ -12,6 +12,8 @@ import { cors } from "hono/cors";
 import { websocket } from "@hono/bun";
 import { setWebSocketServer } from "@/lib/websocket";
 
+import { referralsRoute } from "@/routes/referrals.route";
+
 const app = new Hono<AppEnv>();
 const clientOrigin = process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
 
@@ -31,6 +33,7 @@ app.get("/", (c) => {
 });
 
 app.route("/users", usersRoute);
+app.route("/referrals", referralsRoute);
 app.route("/watchlist", watchlistRoute);
 app.route("/reviews", reviewsRoute);
 app.route("/markets", marketsRoute);
