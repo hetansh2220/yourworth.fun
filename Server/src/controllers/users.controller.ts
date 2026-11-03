@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { alias } from "drizzle-orm/pg-core";
 import { desc, eq, lt, getTableColumns, sql } from "drizzle-orm";
 
 import { db } from "@/db";
@@ -173,10 +174,17 @@ export async function getMe(c: Context<AppEnv>) {
   const walletAddress = c.get("walletAddress");
 
   try {
+    const referrer = alias(users, "referrer");
     const [user] = await db
-      .select({ ...getTableColumns(users), socials: socialFields })
+      .select({
+        ...getTableColumns(users),
+        socials: socialFields,
+        usedReferralCode: referrer.referralCode,
+      })
       .from(users)
       .leftJoin(socials, eq(socials.userId, users.id))
+      .leftJoin(referrals, eq(referrals.referredUserId, users.id))
+      .leftJoin(referrer, eq(referrer.id, referrals.referrerId))
       .where(eq(users.address, walletAddress))
       .limit(1);
 
