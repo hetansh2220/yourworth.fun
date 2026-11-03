@@ -2,6 +2,8 @@
 
 import { MetricChart } from "@/components/metric-chart";
 import type { ChartConfig } from "@/components/ui/chart";
+import { useBalances } from "@/hooks/use-balance";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const monthlyData = [
   { period: "Jan", amount: 18000 }, { period: "Feb", amount: 28000 },
@@ -34,10 +36,12 @@ const portfolioValue = dailyData[dailyData.length - 1].amount;
 const todayChange = portfolioValue - dailyData[dailyData.length - 2].amount;
 
 export function PortfolioChart() {
+  const { data, isLoading } = useBalances();
+
   return (
     <MetricChart
       title="Portfolio"
-      value={currency.format(portfolioValue)}
+      value={isLoading ? <Skeleton className="h-10 w-44" /> : currency.format(data?.totalUsdValue ?? 0)}
       description={<p className={`text-sm tabular-nums ${todayChange > 0 ? "text-emerald-400" : todayChange < 0 ? "text-red-400" : "text-muted-foreground"}`}>{todayChange >= 0 ? "+" : ""}{currency.format(todayChange)} Today</p>}
       config={chartConfig}
       periods={periods}

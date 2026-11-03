@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type MetricChartProps = {
   title: string;
-  value: string;
+  value: ReactNode;
   description: ReactNode;
   config: ChartConfig;
   periods: {
