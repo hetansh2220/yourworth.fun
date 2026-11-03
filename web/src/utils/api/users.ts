@@ -9,6 +9,8 @@ export type User = {
   avatar: string;
   bio: string;
   token: string | null;
+  referralCode: string | null;
+  usedReferralCode?: string | null;
   createdAt: string;
   updatedAt: string;
   verified: boolean;
@@ -24,6 +26,7 @@ export type CreateUserInput = {
   name: string;
   bio: string;
   avatar: string;
+  referralCode?: string;
 };
 
 export type UpdateUserInput = {
@@ -32,6 +35,7 @@ export type UpdateUserInput = {
   bio?: string;
   /** URL of an uploaded avatar, as required by the update endpoint. */
   avatar?: string;
+  referralCode?: string;
 };
 
 export async function checkUsernameAvailability(username: string) {
