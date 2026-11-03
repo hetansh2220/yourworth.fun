@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
+import { CryptoWatchlistSkeleton } from "@/components/skeleton/crypto-watchlist-skeleton";
 
 const demoMarketData = [
   { price: 67432.8, change: 2.34 },
@@ -29,6 +30,8 @@ const changeFormatter = new Intl.NumberFormat("en-US", {
 export function CryptoWatchlist() {
   const { data, isLoading, isError } = useWatchlist();
 
+  if (isLoading) return <CryptoWatchlistSkeleton />;
+
   return (
     <Card>
       <CardHeader>
@@ -40,16 +43,7 @@ export function CryptoWatchlist() {
           className="border-separate border-spacing-0"
         >
           <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={2}
-                  className="text-center text-sm text-muted-foreground"
-                >
-                  Loading watchlist…
-                </TableCell>
-              </TableRow>
-            ) : isError ? (
+            {isError ? (
               <TableRow>
                 <TableCell
                   colSpan={2}

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TransactionHistorySkeleton } from "@/components/skeleton/transaction-history-skeleton";
 
 const transactions = [
   { id: "875643", token: tokens[0], amount: 200 },
@@ -19,7 +20,9 @@ const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "
 const quantity = new Intl.NumberFormat("en-US", { maximumFractionDigits: 8 });
 const percentage = new Intl.NumberFormat("en-US", { style: "percent", signDisplay: "always", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function TransactionHistory() {
+export function TransactionHistory({ isLoading = false }: { isLoading?: boolean }) {
+  if (isLoading) return <TransactionHistorySkeleton />;
+
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"asc" | "desc" | null>(null);
   const filtered = transactions.filter((transaction) =>

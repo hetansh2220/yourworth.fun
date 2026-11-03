@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useReviews } from "@/hooks/use-reviews";
 import { useUsers } from "@/hooks/use-profile";
+import { ProfileReviewsSkeleton } from "@/components/skeleton/profile-reviews-skeleton";
 
 function formatReviewDate(date: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -19,6 +20,8 @@ export function ProfileReviews({ username }: { username: string }) {
   const { data, isLoading } = useReviews(profile?.id ?? "");
   const reviews = data?.reviews ?? [];
 
+  if (isLoading) return <ProfileReviewsSkeleton />;
+
   return (
     <Card>
       <CardHeader>
@@ -27,11 +30,7 @@ export function ProfileReviews({ username }: { username: string }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="max-h-[560px] overflow-y-auto">
-        {isLoading ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">
-            Loading reviews…
-          </p>
-        ) : reviews.length === 0 ? (
+        {reviews.length === 0 ? (
           <div className="space-y-2 py-4 text-center">
             <StarIcon
               size={24}

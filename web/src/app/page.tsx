@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import Hero from "@/components/hero";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { getUser } from "@/utils/api/users";
 export default function Page() {
   const { ready, authenticated, getAccessToken } = usePrivy();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
 
@@ -26,7 +27,12 @@ export default function Page() {
       } catch (error) {
         if (cancelled) return;
         if (error instanceof ApiError && error.status === 404) {
-          router.replace("/create-profile");
+          const referralCode =
+            searchParams.get("ref") ?? searchParams.get("referralCode");
+          const target = referralCode
+            ? `/create-profile?ref=${encodeURIComponent(referralCode)}`
+            : "/create-profile";
+          router.replace(target);
         } else {
           setError(error instanceof Error ? error.message : "Could not load your profile.");
         }
@@ -34,7 +40,7 @@ export default function Page() {
     }
     void checkProfile();
     return () => { cancelled = true; };
-  }, [ready, authenticated, getAccessToken, router, attempt]);
+  }, [ready, authenticated, getAccessToken, router, searchParams, attempt]);
 
   if (!ready || authenticated) return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-6">

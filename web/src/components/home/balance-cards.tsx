@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useBalance } from "@/hooks/use-balance";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function BalanceCards() {
   const { data: balance, isLoading } = useBalance();
@@ -35,7 +36,11 @@ export function BalanceCards() {
             </CardAction>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold tabular-nums">{amount}</p>
+            {isLoading && title === "Total Balance" ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <p className="text-2xl font-semibold tabular-nums">{amount}</p>
+            )}
             <CardDescription>In the past 12 months</CardDescription>
           </CardContent>
         </Card>

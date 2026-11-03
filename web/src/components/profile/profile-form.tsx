@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import {
   useCreateProfile,
@@ -21,10 +22,12 @@ import {
 } from "@/components/profile/profile-required";
 
 export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
+  const pendingReferralStorageKey = "pending-referral-code";
   const isCreate = mode === "create";
   const currentProfile = useCurrentProfile();
   const updateCurrentProfile = useUpdateCurrentProfile();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { ready, authenticated, login } = usePrivy();
   const createProfile = useCreateProfile();
   const updateProfile = useUpdateProfile();
@@ -46,11 +49,25 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const photoRequest = useRef(0);
   const [photoLoading, setPhotoLoading] = useState(false);
+  const [referralCode, setReferralCode] = useState("");
   const dirty = JSON.stringify(profile) !== JSON.stringify(saved);
   const usernameAvailability = useUsernameAvailability(
     profile.username,
     currentProfile?.username,
   );
+
+  useEffect(() => {
+    if (!isCreate) {
+      if (currentProfile?.usedReferralCode && !referralCode) {
+        setReferralCode(currentProfile.usedReferralCode);
+      }
+      return;
+    }
+    const urlCode = searchParams.get("referralCode") ?? searchParams.get("ref");
+    const storedCode = window.localStorage.getItem(pendingReferralStorageKey);
+    const code = urlCode ?? storedCode ?? "";
+    if (code) setReferralCode(code.toLowerCase());
+  }, [currentProfile?.usedReferralCode, isCreate, referralCode, searchParams]);
 
   function update(field: keyof typeof profile, value: string) {
     setProfile((previous) => ({ ...previous, [field]: value }));
@@ -125,6 +142,12 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                 }
                 if (isCreate) {
                   if (!authenticated) {
+                    if (referralCode.trim()) {
+                      window.localStorage.setItem(
+                        pendingReferralStorageKey,
+                        referralCode.trim().toLowerCase(),
+                      );
+                    }
                     login();
                     return;
                   }
@@ -148,7 +171,11 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                       name: profile.name.trim(),
                       bio: profile.bio.trim(),
                       avatar: avatarFile,
+                      ...(referralCode.trim()
+                        ? { referralCode: referralCode.trim().toLowerCase() }
+                        : {}),
                     });
+                    window.localStorage.removeItem(pendingReferralStorageKey);
                     router.replace("/dashboard");
                   } catch (error) {
                     setStatus(
@@ -181,6 +208,9 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                     username: profile.username.trim(),
                     bio: profile.bio.trim(),
                     ...(avatarFile ? { avatar: avatarFile } : {}),
+                    ...(referralCode.trim() && !currentProfile?.usedReferralCode
+                      ? { referralCode: referralCode.trim().toLowerCase() }
+                      : {}),
                   });
                   const updated = {
                     name: user.name,
@@ -308,6 +338,27 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                               : ""}
                       </p>
                     )}
+                </div>
+                <div className="grid gap-2">
+                  <label htmlFor="profile-referral-code" className="text-sm">
+                    {isCreate ? "Referral code" : "Referral code used"}
+                    {isCreate && (
+                      <span className="text-muted-foreground"> (optional)</span>
+                    )}
+                  </label>
+                  <Input
+                    id="profile-referral-code"
+                    value={referralCode}
+                    onChange={(event) =>
+                      setReferralCode(event.target.value.toLowerCase())
+                    }
+                    disabled={Boolean(currentProfile?.usedReferralCode)}
+                    maxLength={6}
+                    pattern="[a-z0-9]{1,6}"
+                    placeholder="No referral code used"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
                 </div>
               </fieldset>
               <div className="grid gap-2">

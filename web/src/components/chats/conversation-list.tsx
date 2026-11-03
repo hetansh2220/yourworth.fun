@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import type { ChatMessage } from "@/components/chats/chat-messages";
+import { ConversationListSkeleton } from "@/components/skeleton/conversation-list-skeleton";
 
 export type Conversation = {
   id: string;
@@ -17,10 +18,11 @@ export type Conversation = {
   messages: ChatMessage[];
 };
 
-export function ConversationList({ conversations, selectedId, onSelect }: {
+export function ConversationList({ conversations, selectedId, onSelect, loading = false }: {
   conversations: Conversation[];
   selectedId: string;
   onSelect: (id: string) => void;
+  loading?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const filtered = conversations.filter((conversation) => conversation.name.toLowerCase().includes(search.trim().toLowerCase()));
@@ -34,6 +36,8 @@ export function ConversationList({ conversations, selectedId, onSelect }: {
         <Input aria-label="Search conversations" placeholder="Search conversations…" value={search} onChange={(event) => setSearch(event.target.value)} />
       </div>
       <nav aria-label="Conversations" className="min-h-0 flex-1 overflow-y-auto py-2">
+        {loading ? <ConversationListSkeleton /> : (
+          <>
         {filtered.map((conversation) => {
           const last = conversation.messages.at(-1);
           return (
@@ -56,6 +60,8 @@ export function ConversationList({ conversations, selectedId, onSelect }: {
           );
         })}
         {filtered.length === 0 ? <p className="p-4 text-center text-sm text-muted-foreground">No conversations found.</p> : null}
+          </>
+        )}
       </nav>
     </>
   );

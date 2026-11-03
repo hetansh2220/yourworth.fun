@@ -34,6 +34,10 @@ import {
   useWallets as useSolanaWallets,
 } from "@privy-io/react-auth/solana";
 import { refundOrder } from "@/utils/solana/orders";
+import {
+  ChatMessagesSkeleton,
+  ChatThreadSkeleton,
+} from "@/components/skeleton/chat-thread-skeleton";
 
 export function ChatsScreen() {
   const { data: chats = [], isLoading, isError } = useChats();
@@ -74,7 +78,7 @@ export function ChatsScreen() {
     avatar: member.avatar,
     initials: member.name.slice(0, 2).toUpperCase(),
   }));
-  const { data: messageResponse } = useMessages(activeId);
+  const { data: messageResponse, isLoading: messagesLoading } = useMessages(activeId);
   const loadedMessages: ChatMessage[] = (messageResponse?.messages ?? []).map(
     (message) => ({
       id: message.id,
@@ -473,6 +477,7 @@ export function ChatsScreen() {
             conversations={conversations}
             selectedId={activeId ?? ""}
             onSelect={selectConversation}
+            loading={isLoading}
           />
         </aside>
 
@@ -482,6 +487,14 @@ export function ChatsScreen() {
             showThread ? "flex" : "hidden md:flex",
           )}
         >
+          {isLoading ? (
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="min-h-0 flex-1">
+                <ChatThreadSkeleton />
+              </div>
+              <ChatComposer onSend={(text) => sendMessage(text)} />
+            </div>
+          ) : <>
           <header className="flex h-16 shrink-0 items-center gap-3 border-b border-white/5 bg-card/60 px-4">
             <Button
               variant="ghost"
@@ -527,23 +540,23 @@ export function ChatsScreen() {
             )}
           </header>
 
-          {isLoading ? (
-            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-              Loading chats…
-            </div>
-          ) : isError ? (
+          {isError ? (
             <div className="flex flex-1 items-center justify-center text-sm text-destructive">
               Could not load chats.
             </div>
           ) : selected ? (
             <>
               <div className="min-h-0 flex-1">
-                <ChatMessages
-                  key={selected.id}
-                  messages={displayMessages}
-                  name={selected.name}
-                  initials={selected.initials}
-                />
+                {messagesLoading ? (
+                  <ChatMessagesSkeleton />
+                ) : (
+                  <ChatMessages
+                    key={selected.id}
+                    messages={displayMessages}
+                    name={selected.name}
+                    initials={selected.initials}
+                  />
+                )}
               </div>
               <ChatComposer
                 key={selected.id}
@@ -561,6 +574,7 @@ export function ChatsScreen() {
               </div>
             </div>
           )}
+          </>}
         </section>
       </Card>
     </main>

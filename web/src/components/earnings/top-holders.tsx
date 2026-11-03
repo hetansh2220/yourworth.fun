@@ -1,4 +1,5 @@
 import { Leaderboard, type LeaderboardEntry } from "@/components/earnings/leaderboard";
+import { LeaderboardSkeleton } from "@/components/skeleton/leaderboard-skeleton";
 
 const holders: LeaderboardEntry[] = [
   { name: "Olivia Rhye", initials: "OR", wallet: "0x71C4…9A23", amount: 128450 },
@@ -8,6 +9,7 @@ const holders: LeaderboardEntry[] = [
   { name: "Drew Cano", initials: "DC", wallet: "0x2B85…E490", amount: 52100 },
 ];
 
-export function TopHolders() {
+export function TopHolders({ isLoading = false }: { isLoading?: boolean }) {
+  if (isLoading) return <LeaderboardSkeleton title="Top Holders" />;
   return <Leaderboard title="Top Holders" amountLabel="Holdings" entries={holders} />;
 }
