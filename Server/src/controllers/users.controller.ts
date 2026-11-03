@@ -2,12 +2,19 @@ import type { Context } from "hono";
 import { desc, eq, lt, getTableColumns, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { createUserSchema, updateUserSchema, users, socials, referrals } from "@/db/schema";
+import {
+  createUserSchema,
+  updateUserSchema,
+  users,
+  socials,
+  referrals,
+} from "@/db/schema";
 import type { AppEnv } from "@/types/app";
 import { PublicKey } from "@solana/web3.js";
 import { unpackAccount } from "@solana/spl-token";
 import { USDC_MINT } from "@/constants";
 import connection from "@/lib/connection";
+import { getBalances, getUsdcBalance } from "@/helpers/balances.helpers";
 
 const socialFields = {
   twitterUsername: socials.twitterUsername,
@@ -18,7 +25,9 @@ const socialFields = {
 function getErrorCode(error: unknown): string {
   if (typeof error !== "object" || error === null) return "";
   if ("code" in error && typeof error.code === "string") return error.code;
-  return "cause" in error && error.cause !== error ? getErrorCode(error.cause) : "";
+  return "cause" in error && error.cause !== error
+    ? getErrorCode(error.cause)
+    : "";
 }
 
 function getTokenParam(c: Context<AppEnv>) {
@@ -90,30 +99,43 @@ export async function createUser(c: Context<AppEnv>) {
 
     const referralCode = parsedBody.data.referralCode;
     const [referrer] = referralCode
-      ? await db.select({ id: users.id }).from(users)
-          .where(eq(users.referralCode, referralCode)).limit(1)
+      ? await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.referralCode, referralCode))
+          .limit(1)
       : [];
     if (referralCode && !referrer) {
       return c.json({ success: false, message: "Invalid referral code" }, 400);
     }
 
-    const insertUser = db.insert(users).values({
-      username: cleanUsername,
-      name: cleanName,
-      address: walletAddress,
-      avatar: parsedBody.data.avatar,
-      bio: cleanBio,
-    }).returning();
+    const insertUser = db
+      .insert(users)
+      .values({
+        username: cleanUsername,
+        name: cleanName,
+        address: walletAddress,
+        avatar: parsedBody.data.avatar,
+        bio: cleanBio,
+      })
+      .returning();
     const [newUser] = referrer
-      ? (await db.batch([
-          insertUser,
-          db.insert(referrals).select(
-            db.select({
-              referrerId: sql<string>`${referrer.id}::uuid`.as("referrer_id"),
-              referredUserId: users.id,
-            }).from(users).where(eq(users.address, walletAddress)),
-          ),
-        ]))[0]
+      ? (
+          await db.batch([
+            insertUser,
+            db.insert(referrals).select(
+              db
+                .select({
+                  referrerId: sql<string>`${referrer.id}::uuid`.as(
+                    "referrer_id",
+                  ),
+                  referredUserId: users.id,
+                })
+                .from(users)
+                .where(eq(users.address, walletAddress)),
+            ),
+          ])
+        )[0]
       : await insertUser;
 
     return c.json(
@@ -272,14 +294,14 @@ export async function getUsers(c: Context<AppEnv>) {
       ? await db
           .select(publicUserFields)
           .from(users)
-      .leftJoin(socials, eq(socials.userId, users.id))
+          .leftJoin(socials, eq(socials.userId, users.id))
           .where(lt(users.createdAt, validCursor))
           .orderBy(desc(users.createdAt))
           .limit(limit + 1)
       : await db
           .select(publicUserFields)
           .from(users)
-      .leftJoin(socials, eq(socials.userId, users.id))
+          .leftJoin(socials, eq(socials.userId, users.id))
           .orderBy(desc(users.createdAt))
           .limit(limit + 1);
 
@@ -410,31 +432,51 @@ export async function updateUser(c: Context<AppEnv>) {
 
     const referralCode = parsedBody.data.referralCode;
     const [referrer] = referralCode
-      ? await db.select({ id: users.id }).from(users)
-          .where(eq(users.referralCode, referralCode)).limit(1)
+      ? await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.referralCode, referralCode))
+          .limit(1)
       : [];
     if (referralCode && !referrer) {
       return c.json({ success: false, message: "Invalid referral code" }, 400);
     }
     if (referrer?.id === existingUser.id) {
-      return c.json({ success: false, message: "You cannot refer yourself" }, 400);
+      return c.json(
+        { success: false, message: "You cannot refer yourself" },
+        400,
+      );
     }
     const [existingReferral] = referrer
-      ? await db.select().from(referrals)
-          .where(eq(referrals.referredUserId, existingUser.id)).limit(1)
+      ? await db
+          .select()
+          .from(referrals)
+          .where(eq(referrals.referredUserId, existingUser.id))
+          .limit(1)
       : [];
     if (existingReferral && existingReferral.referrerId !== referrer?.id) {
-      return c.json({ success: false, message: "A referrer is already assigned" }, 409);
+      return c.json(
+        { success: false, message: "A referrer is already assigned" },
+        409,
+      );
     }
-    const update = db.update(users)
+    const update = db
+      .update(users)
       .set({ ...updateValues, updatedAt: new Date() })
-      .where(eq(users.id, existingUser.id)).returning();
-    const [updatedUser] = referrer && !existingReferral
-      ? (await db.batch([
-          update,
-          db.insert(referrals).values({ referrerId: referrer.id, referredUserId: existingUser.id }),
-        ]))[0]
-      : await update;
+      .where(eq(users.id, existingUser.id))
+      .returning();
+    const [updatedUser] =
+      referrer && !existingReferral
+        ? (
+            await db.batch([
+              update,
+              db.insert(referrals).values({
+                referrerId: referrer.id,
+                referredUserId: existingUser.id,
+              }),
+            ])
+          )[0]
+        : await update;
 
     return c.json(
       {
@@ -486,21 +528,24 @@ export async function getUserBalance(c: Context<AppEnv>) {
   }
 }
 
-/** Returns the wallet's total USDC balance in USDC units (not base units). */
-async function getUsdcBalance(address: string | PublicKey): Promise<number> {
-  const owner = typeof address === "string" ? new PublicKey(address) : address;
-  const accounts = await connection.getTokenAccountsByOwner(
-    owner,
-    { mint: new PublicKey(USDC_MINT) },
-    "confirmed",
-  );
+export async function getUserBalances(c: Context<AppEnv>) {
+  const address = c.get("walletAddress");
 
-  const amount = accounts.value.reduce(
-    (total, account) =>
-      total + unpackAccount(account.pubkey, account.account).amount,
-    0n,
-  );
+  if (!address) {
+    return c.json({ success: false, message: "Unauthorized" }, 401);
+  }
 
-  return Number(amount) / 1_000_000;
+  const page = Number(c.req.query("page") ?? "1");
+  const limit = Number(c.req.query("limit") ?? "100");
+
+  try {
+    const balancesResponse = await getBalances(address, { page, limit });
+    return c.json({ success: true, ...balancesResponse }, 200);
+  } catch (error) {
+    console.error("Get user balances error:", error);
+    return c.json(
+      { success: false, message: "Failed to retrieve user balances" },
+      500,
+    );
+  }
 }
-
