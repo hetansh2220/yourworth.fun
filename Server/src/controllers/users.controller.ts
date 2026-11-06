@@ -1,21 +1,16 @@
-import type { Context } from "hono";
-import { alias } from "drizzle-orm/pg-core";
 import { desc, eq, getTableColumns, ilike, lt, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import type { Context } from "hono";
 
 import { db } from "@/db";
 import {
   createUserSchema,
+  referrals,
+  socials,
   updateUserSchema,
   users,
-  socials,
-  referrals,
 } from "@/db/schema";
 import type { AppEnv } from "@/types/app";
-import { PublicKey } from "@solana/web3.js";
-import { unpackAccount } from "@solana/spl-token";
-import { USDC_MINT } from "@/constants";
-import connection from "@/lib/connection";
-import { getBalances, getUsdcBalance } from "@/helpers/balances.helpers";
 
 const socialFields = {
   twitterUsername: socials.twitterUsername,
@@ -553,47 +548,6 @@ export async function updateUser(c: Context<AppEnv>) {
         success: false,
         message: "Failed to update user",
       },
-      500,
-    );
-  }
-}
-
-/** Returns the authenticated wallet's USDC balance. */
-export async function getUserBalance(c: Context<AppEnv>) {
-  const address = c.get("walletAddress");
-  if (!address) {
-    return c.json({ success: false, message: "Unauthorized" }, 401);
-  }
-
-  try {
-    const balance = await getUsdcBalance(address);
-    return c.json({ success: true, balance }, 200);
-  } catch (error) {
-    console.error("Get USDC balance error:", error);
-    return c.json(
-      { success: false, message: "Failed to retrieve USDC balance" },
-      500,
-    );
-  }
-}
-
-export async function getUserBalances(c: Context<AppEnv>) {
-  const address = c.get("walletAddress");
-
-  if (!address) {
-    return c.json({ success: false, message: "Unauthorized" }, 401);
-  }
-
-  const page = Number(c.req.query("page") ?? "1");
-  const limit = Number(c.req.query("limit") ?? "100");
-
-  try {
-    const balancesResponse = await getBalances(address, { page, limit });
-    return c.json({ success: true, ...balancesResponse }, 200);
-  } catch (error) {
-    console.error("Get user balances error:", error);
-    return c.json(
-      { success: false, message: "Failed to retrieve user balances" },
       500,
     );
   }

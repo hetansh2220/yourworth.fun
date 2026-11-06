@@ -5,9 +5,7 @@ import {
   getMe,
   getUserByToken,
   getUsers,
-  getUserBalance,
   updateUser,
-  getUserBalances,
   searchUser,
 } from "@/controllers/users.controller";
 import { authMiddleware } from "@/middleware/authMiddleware";
@@ -21,6 +19,4 @@ usersRoute.get("/search", searchUser);
 usersRoute.get("/me", authMiddleware, getMe);
 usersRoute.patch("/me", authMiddleware, updateUser);
 usersRoute.post("/", authMiddleware, createUser);
-usersRoute.get("/balance", authMiddleware, getUserBalance);
-usersRoute.get("/balances", authMiddleware, getUserBalances);
 usersRoute.get("/:token", getUserByToken);

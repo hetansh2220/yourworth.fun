@@ -14,6 +14,7 @@ import { setWebSocketServer } from "@/lib/websocket";
 
 import { referralsRoute } from "@/routes/referrals.route";
 import { earningsRoute } from "@/routes/earnings.route";
+import { portfolioRoute } from "@/routes/portfolio.route";
 
 const app = new Hono<AppEnv>();
 const clientOrigin = process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
@@ -36,6 +37,7 @@ app.get("/", (c) => {
 app.route("/users", usersRoute);
 app.route("/referrals", referralsRoute);
 app.route("/earnings", earningsRoute);
+app.route("/portfolio", portfolioRoute);
 app.route("/watchlist", watchlistRoute);
 app.route("/reviews", reviewsRoute);
 app.route("/markets", marketsRoute);
