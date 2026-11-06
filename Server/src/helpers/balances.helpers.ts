@@ -32,6 +32,30 @@ export type BalancesOptions = {
   limit?: number;
 };
 
+export type WalletChartPeriod =
+  | "hour"
+  | "day"
+  | "week"
+  | "month"
+  | "3months"
+  | "6months"
+  | "year"
+  | "5years"
+  | "max";
+
+export type WalletBalanceChartResponse = {
+  links: { self: string };
+  data: {
+    type: "wallet_chart";
+    id: string;
+    attributes: {
+      begin_at: string;
+      end_at: string;
+      points: [timestamp: number, balance: number][];
+    };
+  };
+};
+
 async function getBalances(
   address: string,
   { page = 1, limit = 100 }: BalancesOptions = {},
@@ -84,4 +108,53 @@ async function getUsdcBalance(address: string | PublicKey): Promise<number> {
   return Number(amount) / 1_000_000;
 }
 
-export { getBalances, getUsdcBalance };
+async function getWalletBalanceChart(
+  address: string,
+  period: WalletChartPeriod = "day",
+): Promise<[timestamp: number, balance: number][]> {
+  const apiKey = process.env.ZERION_API_KEY?.trim();
+  if (!apiKey) throw new Error("Missing ZERION_API_KEY");
+  if (!address.trim()) throw new Error("Wallet address is required");
+  if (
+    ![
+      "hour",
+      "day",
+      "week",
+      "month",
+      "3months",
+      "6months",
+      "year",
+      "5years",
+      "max",
+    ].includes(period)
+  ) {
+    throw new Error("Invalid chart period");
+  }
+
+  const url = new URL(
+    `https://api.zerion.io/v1/wallets/${encodeURIComponent(address.trim())}/charts/${period}`,
+  );
+
+  url.search = new URLSearchParams({
+    currency: "usd",
+    "filter[positions]": "only_simple",
+  }).toString();
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`,
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch wallet balance chart (${response.status})`,
+    );
+  }
+
+  const chart = (await response.json()) as WalletBalanceChartResponse;
+  return chart.data.attributes.points;
+}
+
+export { getBalances, getUsdcBalance, getWalletBalanceChart };

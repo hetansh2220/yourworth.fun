@@ -23,6 +23,7 @@ import {
   users,
   markets,
   dmRequests,
+  earnings,
 } from "@/db/schema";
 import type { AppEnv } from "@/types/app";
 import { upgradeWebSocket, type BunWebSocketData } from "@hono/bun";
@@ -521,6 +522,22 @@ export async function replyDM(c: Context<AppEnv>) {
     ) {
       throw new Error("Payout does not match the DM request");
     }
+    const { decimals } = await getMint(
+      connection,
+      new PublicKey(request.paymentMint),
+      "confirmed",
+    );
+    const rawAmount = BigInt(request.amount);
+    const divisor = 10n ** BigInt(decimals);
+    const wholeAmount = rawAmount / divisor;
+    const fractionalAmount = (rawAmount % divisor)
+      .toString()
+      .padStart(decimals, "0")
+      .replace(/0+$/, "");
+    const earningAmount = fractionalAmount
+      ? `${wholeAmount}.${fractionalAmount}`
+      : wholeAmount.toString();
+
     confirmedSignature = await signAndSendTransaction(parsed.data.transaction);
     const confirmation = await connection.confirmTransaction(
       confirmedSignature,
@@ -532,12 +549,17 @@ export async function replyDM(c: Context<AppEnv>) {
     }>(sql`
       with completed as (
         update ${dmRequests} set status = 'COMPLETED', complete_tx_signature = ${confirmedSignature}, completed_at = now(), updated_at = now()
-        where id = ${request.id}::uuid and status = 'PENDING' returning chat_id
+        where id = ${request.id}::uuid and status = 'PENDING' returning chat_id, creator_id
       ), saved_message as (
         insert into ${messages} (chat_id, sender_id, content)
         select chat_id, ${sender.id}::uuid, ${parsed.data.message} from completed
         returning id, chat_id as "chatId", sender_id as "senderId", content,
           created_at as "createdAt", updated_at as "updatedAt", deleted_at as "deletedAt"
+      ), saved_earning as (
+        insert into ${earnings} (user_id, source, amount, transaction_signature)
+        select creator_id, 'DM'::earning_source, ${earningAmount}::numeric, ${confirmedSignature}
+        from completed
+        returning id
       ), updated_chat as (
         update ${chats} set updated_at = now() where id in (select chat_id from completed)
       ) select row_to_json(saved_message) as message from saved_message
