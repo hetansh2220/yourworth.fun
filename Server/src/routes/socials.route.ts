@@ -1,7 +1,4 @@
-import {
-  connectTwitter,
-  twitterCallback,
-} from "@/helpers/twitter.helper";
+import { connectTwitter, twitterCallback } from "@/helpers/twitter.helper";
 import { Hono } from "hono";
 import {
   createSocials,
