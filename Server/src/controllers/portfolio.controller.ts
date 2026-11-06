@@ -1,9 +1,12 @@
 import { unpackAccount } from "@solana/spl-token";
 import { PublicKey } from "@solana/web3.js";
+import { count, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { z } from "zod";
 
 import { USDC_MINT } from "@/constants";
+import { db } from "@/db";
+import { referrals, reviews, users } from "@/db/schema";
 import connection from "@/lib/connection";
 import type { AppEnv } from "@/types/app";
 
@@ -41,6 +44,44 @@ type WalletBalanceChartResponse = {
     };
   };
 };
+
+/** GET /portfolio/stats. Counts referrals and reviews submitted by the user. */
+export async function getPortfolioStats(c: Context<AppEnv>) {
+  try {
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.address, c.get("walletAddress")))
+      .limit(1);
+
+    if (!user) {
+      return c.json({ success: false, message: "User profile not found" }, 404);
+    }
+
+    const [referralResult, reviewResult] = await Promise.all([
+      db
+        .select({ count: count() })
+        .from(referrals)
+        .where(eq(referrals.referrerId, user.id)),
+      db
+        .select({ count: count() })
+        .from(reviews)
+        .where(eq(reviews.reviewerId, user.id)),
+    ]);
+
+    return c.json({
+      success: true,
+      referralsCount: referralResult[0]?.count ?? 0,
+      reviewsCount: reviewResult[0]?.count ?? 0,
+    });
+  } catch (error) {
+    console.error("Get portfolio stats error:", error);
+    return c.json(
+      { success: false, message: "Failed to retrieve portfolio stats" },
+      500,
+    );
+  }
+}
 
 /** GET /portfolio/balance. Returns the authenticated wallet's USDC balance. */
 export async function getPortfolioBalance(c: Context<AppEnv>) {

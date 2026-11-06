@@ -26,10 +26,6 @@ function getErrorCode(error: unknown): string {
     : "";
 }
 
-function getTokenParam(c: Context<AppEnv>) {
-  return (c.req.param().token ?? "").trim();
-}
-
 export async function createUser(c: Context<AppEnv>) {
   const body = await c.req.json().catch(() => null);
   const parsedBody = createUserSchema.safeParse(body);
@@ -202,65 +198,6 @@ export async function getMe(c: Context<AppEnv>) {
     );
   } catch (error) {
     console.error("Get user error:", error);
-    return c.json(
-      {
-        success: false,
-        message: "Failed to retrieve user",
-      },
-      500,
-    );
-  }
-}
-
-export async function getUserByToken(c: Context<AppEnv>) {
-  const token = getTokenParam(c);
-
-  if (!token) {
-    return c.json(
-      {
-        success: false,
-        message: "Token parameter is required",
-      },
-      400,
-    );
-  }
-
-  try {
-    const [user] = await db
-      .select({
-        id: users.id,
-        username: users.username,
-        name: users.name,
-        token: users.token,
-        avatar: users.avatar,
-        bio: users.bio,
-        createdAt: users.createdAt,
-        socials: socialFields,
-      })
-      .from(users)
-      .leftJoin(socials, eq(socials.userId, users.id))
-      .where(eq(users.token, token))
-      .limit(1);
-
-    if (!user) {
-      return c.json(
-        {
-          success: false,
-          message: "User not found",
-        },
-        404,
-      );
-    }
-
-    return c.json(
-      {
-        success: true,
-        user,
-      },
-      200,
-    );
-  } catch (error) {
-    console.error("Get user by token error:", error);
     return c.json(
       {
         success: false,
