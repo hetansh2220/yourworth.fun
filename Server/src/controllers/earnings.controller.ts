@@ -63,6 +63,15 @@ export async function getEarningsChart(c: Context<AppEnv>) {
 
   try {
     const period = parsedPeriod.data;
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.address, c.get("walletAddress")))
+      .limit(1);
+    if (!user) {
+      return c.json({ success: false, message: "User profile not found" }, 404);
+    }
+
     const now = new Date();
     const currentBucket = startOfPeriod(now, period);
     const bucketCount = period === "daily" ? 7 : period === "weekly" ? 4 : 12;
@@ -88,7 +97,7 @@ export async function getEarningsChart(c: Context<AppEnv>) {
       .from(earnings)
       .where(
         and(
-          eq(earnings.userId, c.get("currentUserId")),
+          eq(earnings.userId, user.id),
           gte(earnings.createdAt, start),
         ),
       )
@@ -127,6 +136,15 @@ export async function getEarningsChart(c: Context<AppEnv>) {
 /** Returns completed DM spenders for the authenticated creator, highest spend first. */
 export async function getSpenders(c: Context<AppEnv>) {
   try {
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.address, c.get("walletAddress")))
+      .limit(1);
+    if (!user) {
+      return c.json({ success: false, message: "User profile not found" }, 404);
+    }
+
     const rows = await db
       .select({
         id: users.id,
@@ -144,7 +162,7 @@ export async function getSpenders(c: Context<AppEnv>) {
       .innerJoin(users, eq(users.id, dmRequests.userId))
       .where(
         and(
-          eq(dmRequests.creatorId, c.get("currentUserId")),
+          eq(dmRequests.creatorId, user.id),
           eq(dmRequests.status, "COMPLETED"),
           eq(earnings.source, "DM"),
         ),

@@ -3,7 +3,6 @@ import {
   createUser,
   checkUsernameAvailability,
   getMe,
-  getUserByToken,
   getUsers,
   updateUser,
   searchUser,
@@ -19,4 +18,3 @@ usersRoute.get("/search", searchUser);
 usersRoute.get("/me", authMiddleware, getMe);
 usersRoute.patch("/me", authMiddleware, updateUser);
 usersRoute.post("/", authMiddleware, createUser);
-usersRoute.get("/:token", getUserByToken);
