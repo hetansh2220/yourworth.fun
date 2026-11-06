@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { alias } from "drizzle-orm/pg-core";
-import { desc, eq, lt, getTableColumns, sql } from "drizzle-orm";
+import { desc, eq, getTableColumns, ilike, lt, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -337,6 +337,47 @@ export async function getUsers(c: Context<AppEnv>) {
       },
       500,
     );
+  }
+}
+
+export async function searchUser(c: Context<AppEnv>) {
+  const query = (c.req.query("q") ?? "").trim();
+  if (!query || query.length > 50) {
+    return c.json(
+      { success: false, message: "Search query must be 1 to 50 characters" },
+      400,
+    );
+  }
+
+  const parsedLimit = Number(c.req.query("limit") ?? "20");
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 50)
+    : 20;
+  const pattern = `%${query.replace(/[\\%_]/g, "\\$&")}%`;
+
+  try {
+    const matches = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        name: users.name,
+        walletAddress: users.address,
+        avatar: users.avatar,
+        bio: users.bio,
+        verified: users.verified,
+        createdAt: users.createdAt,
+        socials: socialFields,
+      })
+      .from(users)
+      .leftJoin(socials, eq(socials.userId, users.id))
+      .where(or(ilike(users.username, pattern), ilike(users.name, pattern)))
+      .orderBy(desc(users.verified), desc(users.createdAt))
+      .limit(limit);
+
+    return c.json({ success: true, users: matches }, 200);
+  } catch (error) {
+    console.error("Search users error:", error);
+    return c.json({ success: false, message: "Failed to search users" }, 500);
   }
 }
 
