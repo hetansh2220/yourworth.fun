@@ -1,7 +1,7 @@
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { db } from "@/db";
-import { earnings } from "@/db/schema";
+import { dmRequests, earnings, users } from "@/db/schema";
 import type { AppEnv } from "@/types/app";
 import { z } from "zod";
 
@@ -119,6 +119,50 @@ export async function getEarningsChart(c: Context<AppEnv>) {
     console.error("Get earnings chart error:", error);
     return c.json(
       { success: false, message: "Failed to get earnings chart" },
+      500,
+    );
+  }
+}
+
+/** Returns completed DM spenders for the authenticated creator, highest spend first. */
+export async function getSpenders(c: Context<AppEnv>) {
+  try {
+    const rows = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        avatar: users.avatar,
+        verified: users.verified,
+        amount: sql<string>`sum(${earnings.amount})::text`.as("amount"),
+      })
+      .from(dmRequests)
+      .innerJoin(
+        earnings,
+        eq(earnings.transactionSignature, dmRequests.completeTxSignature),
+      )
+      .innerJoin(users, eq(users.id, dmRequests.userId))
+      .where(
+        and(
+          eq(dmRequests.creatorId, c.get("currentUserId")),
+          eq(dmRequests.status, "COMPLETED"),
+          eq(earnings.source, "DM"),
+        ),
+      )
+      .groupBy(
+        users.id,
+        users.name,
+        users.username,
+        users.avatar,
+        users.verified,
+      )
+      .orderBy(desc(sql`sum(${earnings.amount})`));
+
+    return c.json({ success: true, spenders: rows });
+  } catch (error) {
+    console.error("Get DM spenders error:", error);
+    return c.json(
+      { success: false, message: "Failed to get DM spenders" },
       500,
     );
   }
