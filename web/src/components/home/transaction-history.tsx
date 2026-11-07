@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { SortAscendingIcon, SortDescendingIcon } from "@phosphor-icons/react";
-import { useBalances } from "@/hooks/use-balance";
+import { usePortfolioHoldings } from "@/hooks/use-portfolio";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,7 +30,7 @@ export function TransactionHistory({
 }) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"asc" | "desc" | null>(null);
-  const { data, isLoading: balancesLoading } = useBalances();
+  const { data, isLoading: balancesLoading } = usePortfolioHoldings();
   const loading = isLoading || balancesLoading;
 
   const filtered = (data?.balances ?? []).filter((token) =>

@@ -13,16 +13,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useBalance } from "@/hooks/use-balance";
+import { usePortfolioHoldings, usePortfolioStats } from "@/hooks/use-portfolio";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function BalanceCards() {
-  const { data: balance, isLoading } = useBalance();
-  const balanceLabel = isLoading ? "Loading…" : `$${(balance ?? 0).toFixed(2)}`;
+  const { data, isLoading } = usePortfolioHoldings();
+  const { data: stats, isLoading: statsLoading } = usePortfolioStats();
+  const holdingsLabel = isLoading ? "Loading…" : String(data?.balances.length ?? 0);
+  const referralsLabel = statsLoading ? "Loading…" : String(stats?.referralsCount ?? 0);
   const balances = [
-    { title: "Total Balance", amount: balanceLabel, icon: BankIcon },
-    { title: "Deposits", amount: "$0.00", icon: ArrowDownLeftIcon },
-    { title: "Withdrawals", amount: "$0.00", icon: ArrowUpRightIcon },
+    { title: "Total Holdings", amount: holdingsLabel, icon: BankIcon },
+    { title: "Total Referrals", amount: referralsLabel, icon: ArrowDownLeftIcon },
+    { title: "Reviews", amount: statsLoading ? "Loading…" : String(stats?.reviewsCount ?? 0), icon: ArrowUpRightIcon },
   ];
 
   return (
@@ -36,7 +38,8 @@ export function BalanceCards() {
             </CardAction>
           </CardHeader>
           <CardContent>
-            {isLoading && title === "Total Balance" ? (
+            {(isLoading && title === "Total Holdings") ||
+            (statsLoading && (title === "Total Referrals" || title === "Reviews")) ? (
               <Skeleton className="h-8 w-32" />
             ) : (
               <p className="text-2xl font-semibold tabular-nums">{amount}</p>
