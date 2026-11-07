@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { db } from "@/db";
 import { dmRequests, earnings, users } from "@/db/schema";
@@ -7,6 +7,34 @@ import { z } from "zod";
 
 const chartPeriodSchema = z.enum(["daily", "weekly", "monthly"]);
 type ChartPeriod = z.infer<typeof chartPeriodSchema>;
+
+/** GET /earnings. Returns the authenticated user's total earnings record count. */
+export async function getEarnings(c: Context<AppEnv>) {
+  try {
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.address, c.get("walletAddress")))
+      .limit(1);
+
+    if (!user) {
+      return c.json({ success: false, message: "User profile not found" }, 404);
+    }
+
+    const [result] = await db
+      .select({ count: count() })
+      .from(earnings)
+      .where(eq(earnings.userId, user.id));
+
+    return c.json({ success: true, earnings: result?.count ?? 0 });
+  } catch (error) {
+    console.error("Get earnings count error:", error);
+    return c.json(
+      { success: false, message: "Failed to get earnings count" },
+      500,
+    );
+  }
+}
 
 function startOfPeriod(date: Date, period: ChartPeriod): Date {
   const start = new Date(
@@ -95,12 +123,7 @@ export async function getEarningsChart(c: Context<AppEnv>) {
         ),
       })
       .from(earnings)
-      .where(
-        and(
-          eq(earnings.userId, user.id),
-          gte(earnings.createdAt, start),
-        ),
-      )
+      .where(and(eq(earnings.userId, user.id), gte(earnings.createdAt, start)))
       .groupBy(bucketExpression)
       .orderBy(bucketExpression);
 
