@@ -12,6 +12,7 @@ import {
   useCreateProfile,
   useUpdateProfile,
   useUsernameAvailability,
+  useReferralCodeAvailability,
 } from "@/hooks/use-profile";
 import { PencilSimpleIcon } from "@phosphor-icons/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,6 +25,7 @@ import {
   useCurrentProfile,
   useUpdateCurrentProfile,
 } from "@/components/profile/profile-required";
+import { checkReferralCodeAvailability } from "@/utils/api/referrals";
 
 export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
   const pendingReferralStorageKey = "pending-referral-code";
@@ -57,10 +59,17 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
   const walletCreationAttempted = useRef(false);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [referralCode, setReferralCode] = useState("");
-  const dirty = JSON.stringify(profile) !== JSON.stringify(saved);
+  const dirty =
+    JSON.stringify(profile) !== JSON.stringify(saved) ||
+    referralCode.trim().toLowerCase() !==
+      (currentProfile?.usedReferralCode ?? "").trim().toLowerCase();
   const usernameAvailability = useUsernameAvailability(
     profile.username,
     currentProfile?.username,
+  );
+  const referralAvailability = useReferralCodeAvailability(
+    referralCode,
+    currentProfile?.usedReferralCode,
   );
 
   useEffect(() => {
@@ -187,6 +196,13 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                     setStatus("Please add a bio.");
                     return;
                   }
+                  if (referralCode.trim()) {
+                    const referral = await checkReferralCodeAvailability(referralCode);
+                    if (referral.available) {
+                      setStatus("This referral code does not exist.");
+                      return;
+                    }
+                  }
                   setSubmitting(true);
                   setStatus("");
                   try {
@@ -223,6 +239,17 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                 if (!profile.bio.trim()) {
                   setStatus("Please add a bio.");
                   return;
+                }
+                if (
+                  referralCode.trim() &&
+                  referralCode.trim().toLowerCase() !==
+                    currentProfile?.usedReferralCode?.toLowerCase()
+                ) {
+                  const referral = await checkReferralCodeAvailability(referralCode);
+                  if (referral.available) {
+                    setStatus("This referral code does not exist.");
+                    return;
+                  }
                 }
                 setSubmitting(true);
                 setStatus("");
@@ -383,6 +410,28 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
                     autoComplete="off"
                     spellCheck={false}
                   />
+                  {referralCode.trim() &&
+                    !referralAvailability.isCurrentReferralCode && (
+                      <p
+                        className={
+                          referralAvailability.isFetching
+                            ? "text-xs text-muted-foreground"
+                            : referralAvailability.data?.available === false
+                              ? "text-xs text-emerald-500"
+                              : "text-xs text-destructive"
+                        }
+                      >
+                        {referralAvailability.isFetching
+                          ? "Checking referral code…"
+                          : referralAvailability.data?.available === false
+                            ? "Referral code is valid"
+                            : referralAvailability.data
+                              ? "Referral code does not exist"
+                              : referralAvailability.error
+                                ? "Could not check referral code"
+                                : ""}
+                      </p>
+                    )}
                 </div>
               </fieldset>
               <div className="grid gap-2">

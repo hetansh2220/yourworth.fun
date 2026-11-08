@@ -22,6 +22,7 @@ import {
     type User,
     type UsersResponse,
 } from "@/utils/api/users";
+import { checkReferralCodeAvailability } from "@/utils/api/referrals";
 
 export const profileQueryKey = ["profile", "current"] as const;
 export const usersQueryKey = ["users"] as const;
@@ -64,6 +65,33 @@ export function useUsernameAvailability(
             queryKey: ["username-availability", debounced],
             queryFn: () => checkUsernameAvailability(debounced),
             enabled: debounced.length >= 3 && !isCurrentUsername,
+            staleTime: 30_000,
+            retry: false,
+        }),
+    };
+}
+
+export function useReferralCodeAvailability(
+    referralCode: string,
+    currentReferralCode?: string | null,
+) {
+    const normalized = referralCode.trim().toLowerCase();
+    const [debounced, setDebounced] = useState("");
+    const isCurrentReferralCode =
+        normalized.length > 0 &&
+        normalized === currentReferralCode?.trim().toLowerCase();
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => setDebounced(normalized), 400);
+        return () => window.clearTimeout(timeout);
+    }, [normalized]);
+
+    return {
+        isCurrentReferralCode,
+        ...useQuery({
+            queryKey: ["referral-code-availability", debounced],
+            queryFn: () => checkReferralCodeAvailability(debounced),
+            enabled: debounced.length > 0 && !isCurrentReferralCode,
             staleTime: 30_000,
             retry: false,
         }),
