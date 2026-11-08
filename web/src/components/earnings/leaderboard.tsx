@@ -1,6 +1,9 @@
+"use client";
+
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { ChartBarIcon } from "@phosphor-icons/react";
 
 export type LeaderboardEntry = {
   name: string;
@@ -14,7 +17,11 @@ const currency = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
-export function Leaderboard({ title, amountLabel, entries }: {
+export function Leaderboard({
+  title,
+  amountLabel,
+  entries,
+}: {
   title: string;
   amountLabel: string;
   entries: LeaderboardEntry[];
@@ -27,21 +34,33 @@ export function Leaderboard({ title, amountLabel, entries }: {
         <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <Table aria-label={title}>
-          <TableBody>
-            {rankedEntries.map((entry) => (
-              <TableRow key={entry.wallet} className="border-0">
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar><AvatarFallback>{entry.initials}</AvatarFallback></Avatar>
-                    <p className="font-medium">{entry.name}</p>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right tabular-nums"><span className="sr-only">{amountLabel}: </span>{currency.format(entry.amount)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        {rankedEntries.length === 0 ? (
+          <div className="flex min-h-32 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
+            <ChartBarIcon size={28} aria-hidden="true" />
+            <p>No {title.toLowerCase()} yet.</p>
+          </div>
+        ) : (
+          <Table aria-label={title}>
+            <TableBody>
+              {rankedEntries.map((entry) => (
+                <TableRow key={entry.wallet} className="border-0">
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar>
+                        <AvatarFallback>{entry.initials}</AvatarFallback>
+                      </Avatar>
+                      <p className="font-medium">{entry.name}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <span className="sr-only">{amountLabel}: </span>
+                    {currency.format(entry.amount)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </CardContent>
     </Card>
   );
