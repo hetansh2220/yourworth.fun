@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import {
+  useCreateWallet,
+  useWallets as useSolanaWallets,
+} from "@privy-io/react-auth/solana";
+import {
   useCreateProfile,
   useUpdateProfile,
   useUsernameAvailability,
@@ -29,6 +33,8 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { ready, authenticated, login } = usePrivy();
+  const { wallets, ready: walletsReady } = useSolanaWallets();
+  const { createWallet } = useCreateWallet();
   const createProfile = useCreateProfile();
   const updateProfile = useUpdateProfile();
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -48,6 +54,7 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
   const [photoError, setPhotoError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const photoRequest = useRef(0);
+  const walletCreationAttempted = useRef(false);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [referralCode, setReferralCode] = useState("");
   const dirty = JSON.stringify(profile) !== JSON.stringify(saved);
@@ -55,6 +62,23 @@ export function ProfileForm({ mode = "edit" }: { mode?: "edit" | "create" }) {
     profile.username,
     currentProfile?.username,
   );
+
+  useEffect(() => {
+    if (
+      !isCreate ||
+      !authenticated ||
+      !walletsReady ||
+      wallets.length > 0 ||
+      walletCreationAttempted.current
+    ) {
+      return;
+    }
+
+    walletCreationAttempted.current = true;
+    void createWallet().catch((error) => {
+      console.error("Could not create embedded Solana wallet:", error);
+    });
+  }, [authenticated, createWallet, isCreate, wallets.length, walletsReady]);
 
   useEffect(() => {
     if (!isCreate) {
