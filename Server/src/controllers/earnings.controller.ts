@@ -124,8 +124,8 @@ export async function getEarningsChart(c: Context<AppEnv>) {
       })
       .from(earnings)
       .where(and(eq(earnings.userId, user.id), gte(earnings.createdAt, start)))
-      .groupBy(bucketExpression)
-      .orderBy(bucketExpression);
+      .groupBy(sql`1`)
+      .orderBy(sql`1`);
 
     const amountByBucket = new Map(
       rows.map((row) => [bucketKey(row.bucket, period), Number(row.amount)]),
