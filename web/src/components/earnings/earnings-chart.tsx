@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { MetricChart } from "@/components/metric-chart";
 import type { ChartConfig } from "@/components/ui/chart";
 import { useEarningsChart, useEarnings } from "@/hooks/use-earnings";
@@ -11,24 +12,45 @@ const currency = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
+function formatChartPoints(
+  points: { period: string; amount: number }[],
+  period: "daily" | "weekly" | "monthly",
+) {
+  const today = new Date();
+  const lastIndex = points.length - 1;
+
+  return points.map((point, index) => {
+    const date = new Date(today);
+    const distance = lastIndex - index;
+
+    if (period === "daily") date.setDate(date.getDate() - distance);
+    if (period === "weekly") date.setDate(date.getDate() - distance * 7);
+    if (period === "monthly") date.setMonth(date.getMonth() - distance);
+
+    return {
+      period:
+        period === "monthly"
+          ? date.toLocaleDateString("en-US", { month: "short" })
+          : date.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            }),
+      amount: point.amount,
+    };
+  });
+}
+
 export function EarningsChart() {
+  const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
   const earnings = useEarnings();
-  const daily = useEarningsChart("daily");
-  const weekly = useEarningsChart("weekly");
-  const monthly = useEarningsChart("monthly");
-  const dailyData = daily.data?.points ?? [];
-  const weeklyData = weekly.data?.points ?? [];
-  const monthlyData = monthly.data?.points ?? [];
-  const todayEarnings = dailyData.at(-1)?.amount ?? 0;
-  const loading =
-    earnings.isLoading ||
-    daily.isLoading ||
-    weekly.isLoading ||
-    monthly.isLoading;
+  const chart = useEarningsChart(period);
+  const chartData = formatChartPoints(chart.data?.points ?? [], period);
+  const todayEarnings = period === "daily" ? chartData.at(-1)?.amount ?? 0 : 0;
+  const loading = chart.isLoading;
   const periods = [
-    { value: "daily", label: "Daily", data: dailyData },
-    { value: "weekly", label: "Weekly", data: weeklyData },
-    { value: "monthly", label: "Monthly", data: monthlyData },
+    { value: "daily", label: "Daily", data: period === "daily" ? chartData : [] },
+    { value: "weekly", label: "Weekly", data: period === "weekly" ? chartData : [] },
+    { value: "monthly", label: "Monthly", data: period === "monthly" ? chartData : [] },
   ];
 
   return (
@@ -45,6 +67,8 @@ export function EarningsChart() {
       config={chartConfig}
       periods={periods}
       loading={loading}
+      selectedPeriod={period}
+      onValueChange={(value) => setPeriod(value as typeof period)}
     />
   );
 }
