@@ -9,12 +9,14 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type MetricChartProps = {
   title: string;
-  value: string;
+  value: ReactNode;
   description: ReactNode;
   config: ChartConfig;
+  loading?: boolean;
   periods: {
     value: string;
     label: string;
@@ -28,6 +30,7 @@ export function MetricChart({
   description,
   config: chartConfig,
   periods,
+  loading = false,
 }: MetricChartProps) {
   return (
     <Tabs defaultValue="daily" className="gap-6">
@@ -37,9 +40,9 @@ export function MetricChart({
             {title}
           </h2>
           <div className="flex flex-wrap items-baseline gap-3">
-            <p className="font-heading text-[32px] font-medium leading-[1.13] tracking-[-1px] tabular-nums">
+            <div className="font-heading text-[32px] font-medium leading-[1.13] tracking-[-1px] tabular-nums">
               {value}
-            </p>
+            </div>
             {description}
           </div>
         </div>
@@ -53,7 +56,7 @@ export function MetricChart({
       </header>
       {periods.map((period) => (
         <TabsContent key={period.value} value={period.value}>
-          <ChartContainer config={chartConfig} className="h-72 w-full">
+          {loading ? <Skeleton className="h-72 w-full" /> : <ChartContainer config={chartConfig} className="h-72 w-full">
             <AreaChart
               accessibilityLayer
               data={period.data}
@@ -74,7 +77,7 @@ export function MetricChart({
                 strokeWidth={2}
               />
             </AreaChart>
-          </ChartContainer>
+          </ChartContainer>}
         </TabsContent>
       ))}
     </Tabs>

@@ -4,12 +4,12 @@ import { DepositDialog } from "@/components/dialogs/deposit-dialog";
 import { WithdrawDialog } from "@/components/dialogs/withdraw-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useProfile } from "@/hooks/use-profile";
-import { useBalance } from "@/hooks/use-balance";
+import { usePortfolioBalance } from "@/hooks/use-portfolio";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useWallets as useSolanaWallets } from "@privy-io/react-auth/solana";
 
 export function TotalBalance() {
-  const { data: balance, isLoading } = useBalance();
+  const { data: balance, isLoading } = usePortfolioBalance();
   const { data: profile } = useProfile();
   const { wallets } = useSolanaWallets();
   const depositAddress = profile?.walletAddress || wallets[0]?.address;
