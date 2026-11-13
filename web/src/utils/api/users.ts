@@ -79,7 +79,7 @@ export async function getUser(accessToken: string): Promise<User> {
 }
 
 export type PublicUser = Pick<User,
-  "id" | "username" | "name" | "avatar" | "bio" | "verified" | "createdAt" | "socials"
+  "id" | "username" | "name" | "avatar" | "bio" | "verified" | "createdAt" | "socials" | "token"
 > & { walletAddress: string };
 
 export type UsersResponse = {
