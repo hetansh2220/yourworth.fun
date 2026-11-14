@@ -29,5 +29,19 @@ export async function generateMetadata({
 export default async function ProfilePage({ params }: ProfilePageProps) {
   const username = await getUsername(params);
 
-  return <ProfilePageContent username={username} />;
+  return (
+    <main className="w-full p-4 sm:p-6">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0 space-y-6">
+          <ProfileHeader username={username} />
+          <ProfileTradingChart />
+          <ProfileOverview username={username} />
+        </div>
+        <div className="min-w-0 space-y-6">
+          <ProfileTradingPanel username={username} />
+          <ProfileReviews username={username} />
+        </div>
+      </div>
+    </main>
+  );
 }
