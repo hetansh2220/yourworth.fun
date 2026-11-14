@@ -56,7 +56,7 @@ export function ProfileTradingPanel({ username }: { username: string }) {
   async function confirmSwap() {
     if (!creator?.token || !valid) return;
     const wallet = wallets.find(
-      (candidate) => candidate.address === profile?.walletAddress,
+      (candidate) => candidate.address === profile?.address,
     );
     if (!wallet) {
       setSubmissionError("Connected Privy Solana wallet not found");

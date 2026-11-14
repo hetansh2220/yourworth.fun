@@ -18,7 +18,7 @@ export function useBuy(
     ...options,
     mutationFn: async (input): Promise<PreparedSwap> => {
       const migrated = await isMigrated(input.tokenMint);
-      const walletAddress = profile?.walletAddress;
+      const walletAddress = profile?.address;
       if (!walletAddress)
         throw new Error("Your profile wallet address is unavailable");
 
