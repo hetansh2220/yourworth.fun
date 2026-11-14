@@ -1,0 +1,5 @@
+const CONFIG_ADDRESS = "1346QXdTeaSsjFxW14LWZgGqLemkjYxtZPKj32JX4cTF";
+const USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+const JUPITER_API = "https://api.jup.ag/swap/v2";
+
+export { CONFIG_ADDRESS, USDC_MINT, JUPITER_API };
