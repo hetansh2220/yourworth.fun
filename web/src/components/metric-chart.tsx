@@ -17,6 +17,8 @@ type MetricChartProps = {
   description: ReactNode;
   config: ChartConfig;
   loading?: boolean;
+  selectedPeriod?: string;
+  onValueChange?: (value: string) => void;
   periods: {
     value: string;
     label: string;
@@ -31,9 +33,11 @@ export function MetricChart({
   config: chartConfig,
   periods,
   loading = false,
+  selectedPeriod,
+  onValueChange,
 }: MetricChartProps) {
   return (
-    <Tabs defaultValue="daily" className="gap-6">
+    <Tabs defaultValue="daily" value={selectedPeriod} onValueChange={onValueChange} className="gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-2">
           <h2 className="font-heading text-[32px] font-medium leading-[1.13] tracking-[-1px]">

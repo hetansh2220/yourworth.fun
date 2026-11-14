@@ -23,6 +23,8 @@ export function useEarnings() {
   return useQuery({
     queryKey: earningsQueryKey,
     enabled: ready && authenticated,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const accessToken = await getAccessToken();
       if (!accessToken) throw missingTokenError();
@@ -37,6 +39,8 @@ export function useEarningsChart(period: EarningsPeriod = "daily") {
   return useQuery({
     queryKey: [...earningsChartQueryKey, period],
     enabled: ready && authenticated,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const accessToken = await getAccessToken();
       if (!accessToken) throw missingTokenError();
@@ -51,6 +55,8 @@ export function useEarningsSpenders() {
   return useQuery({
     queryKey: earningsSpendersQueryKey,
     enabled: ready && authenticated,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const accessToken = await getAccessToken();
       if (!accessToken) throw missingTokenError();

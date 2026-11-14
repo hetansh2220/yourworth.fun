@@ -1,8 +1,4 @@
-import { ProfileHeader } from "@/components/profile/profile-header";
-import { ProfileOverview } from "@/components/profile/profile-overview";
-import { ProfileTradingChart } from "@/components/profile/profile-trading-chart";
-import { ProfileTradingPanel } from "@/components/profile/profile-trading-panel";
-import { ProfileReviews } from "@/components/profile/profile-reviews";
+import { ProfilePageContent } from "@/components/profile/profile-page-content";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 

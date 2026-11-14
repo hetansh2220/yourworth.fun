@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChatCircleDotsIcon, ChatsTeardropIcon, CheckIcon, TrashIcon } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,12 +13,16 @@ type ServiceCardProps = {
   active: boolean;
   onActivate: (pricing: ServicePricing) => void;
   isActivating?: boolean;
+  initialPricing?: ServicePricing;
+  onDeactivate?: () => void;
 };
 
-export function ServiceCard({ type, active, onActivate, isActivating }: ServiceCardProps) {
-  const [notice, setNotice] = useState("");
+export function ServiceCard({ type, active, onActivate, isActivating, initialPricing, onDeactivate }: ServiceCardProps) {
   const isDms = type === "dms";
-  const [pricing, setPricing] = useState<ServicePricing>({ unit: "minutes", amount: isDms ? 1 : 25 });
+  const [pricing, setPricing] = useState<ServicePricing>(initialPricing ?? { unit: "minutes", amount: isDms ? 1 : 25 });
+  useEffect(() => {
+    if (initialPricing) setPricing(initialPricing);
+  }, [initialPricing]);
   const priceLabel = `${pricing.amount} ${pricing.unit === "usdc" ? "USDC" : pricing.amount === 1 ? "minute" : "minutes"}`;
   const actionClass = "h-10 w-full rounded-lg border-border bg-transparent bg-none shadow-none dark:border-border dark:bg-transparent";
   const Icon = isDms ? ChatCircleDotsIcon : ChatsTeardropIcon;
@@ -42,16 +46,18 @@ export function ServiceCard({ type, active, onActivate, isActivating }: ServiceC
           <ServicePricingDialog
             type={type}
             value={pricing}
-            onSave={(value) => active ? setPricing(value) : onActivate(value)}
+            onSave={(value) => {
+              setPricing(value);
+              onActivate(value);
+            }}
             triggerClassName={actionClass}
             triggerLabel={active ? "Edit" : "Activate"}
             title={active ? undefined : `Create ${isDms ? "direct message" : "group chat"} market`}
           />
           {active && <Button type="button" variant="outline" className={actionClass} onClick={() => {
-            setNotice(`${isDms ? "DMs" : "Group Chat"} deactivated in this session.`);
+            onDeactivate?.();
           }} disabled={isActivating}><TrashIcon aria-hidden="true" />Deactivate</Button>}
         </div>
-          {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
       </CardContent>
     </Card>
   );

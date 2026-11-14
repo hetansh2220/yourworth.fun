@@ -1,6 +1,5 @@
 import { EarningsChart } from "@/components/earnings/earnings-chart";
 import { EarningsAnalytics } from "@/components/earnings/earnings-analytics";
-import { TopHolders } from "@/components/earnings/top-holders";
 import { TopSpenders } from "@/components/earnings/top-spenders";
 
 export default function EarningsPage() {
@@ -12,7 +11,7 @@ export default function EarningsPage() {
         <EarningsAnalytics />
       </div>
       <div className="min-w-0 space-y-4">
-        <TopHolders />
+        {/* Top holders will be enabled when the backend provides holder data. */}
         <TopSpenders />
       </div>
     </main>
